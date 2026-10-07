@@ -1,5 +1,27 @@
 # Approved 0.2.0 redesign
 
+## Approved 0.2.2 presentation refinement
+
+The user requested this follow-up on 2026-10-07. Completed items stay in the
+selected day's single Todo list after active items, with a checked control and
+ordinary text. Remove the separate completed heading/collapse control and
+strike-through. Completion/reopen/local-history/Undo behavior is unchanged.
+
+Daily Notes starts at 184px (twice the former approximately 92px control) and
+grows/shrinks with content, retaining that minimum. Loaded notes and width
+changes resize too; there is no inner scrollbar. Existing save/draft behavior
+and validated day-note persistence are retained.
+
+Put previous unfinished work and undated tasks together in an Other Todo card
+beneath next-day commitments in the right column. The card shows the two
+expandable groups and retains completion/edit/move controls. Viewing a past day
+does not duplicate that day's active items in the previous-work group. Narrow
+layouts stack the complete right column beneath the selected day.
+
+Lead owns all changes. No task/event/date mutation, calendar change or new
+contract is part of this presentation update. The specification below records
+the earlier release; this refinement supersedes its separate completed section.
+
 The user approved implementation after a Chinese-language design discussion on 2026-10-07. Lead owns integration, shared contract changes and all changed directories for this iteration. No new agent delegation was requested.
 
 ## Workspace

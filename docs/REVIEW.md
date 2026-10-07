@@ -1,5 +1,23 @@
 # Independent review
 
+## Lead integration review of 0.2.2
+
+Presentation-only changes follow the user's explicit request: a single Todo
+list with active then checked completed rows and normal text, 184px minimum
+Notes with automatic content/width resizing, and a right-column Other Todo card
+under next-day commitments. No calendar, database/service or shared contract
+changes are introduced. Existing completion/reopen and Undo remain intact.
+Past selected-day tasks are omitted from the previous-work group to avoid
+duplicate completion/edit controls for the same task.
+
+Development and packaged desktop checks verify row order, checked state, absence of strike-through and
+separate completion controls, Notes growth/no-inner-scroll/shrink/reload, and
+right-card geometry using isolated data. ResizeObserver ignores height-only
+notifications to avoid self-triggered resizing loops. Type/lint/build and the
+desktop workflows pass, along with all 119 regressions. Lead visually reviewed 1440px and 960px
+screens: colors and independent chat scrolling are retained. Packaged release
+validation is recorded in TASKS.md. The user's normal plan data is not altered.
+
 ## Lead integration review of 0.2.1
 
 Confirmed root cause of the supplied conversation: a six-message/600-character projection dropped original company/time facts and pasted Notes. The larger bounded, redacted projection retains the reported sequence; model instructions require using earlier facts and never requesting user-supplied IDs. create_completed_task is Lead-owned and creates/completes through the existing transaction/audit/undo path, deduplicating same-title/day repeats. Automated payload checks are not live model-quality proof.

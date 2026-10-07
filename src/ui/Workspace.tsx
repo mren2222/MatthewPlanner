@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { ActivityInput, ActivityRecord, CalendarInfo, FixedEvent, MailCandidate, PlannerSnapshot, ProposedAction, SettingsInput, Task } from '../core/types';
 import { actionLabel, addDays, dateLabel, duration, Icon, localDateTime, localDay, timeLabel } from './presentation';
 import { layoutBlocks } from './calendar-layout';
@@ -23,7 +23,6 @@ export default function Workspace() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [modal, setModal] = useState<Modal>(null);
-  const [showCompleted, setShowCompleted] = useState(true);
   const messagesEnd = useRef<HTMLDivElement>(null);
   const operating = useRef(false);
   const run: Run = async (label, operation) => {
@@ -56,7 +55,7 @@ export default function Workspace() {
   const tasks = snapshot.tasks.filter(task => task.plannedDate === day && task.status !== 'cancelled' && task.status !== 'inbox');
   const active = tasks.filter(task => task.status === 'planned');
   const completed = snapshot.tasks.filter(task => task.status === 'completed' && localDay(new Date(task.completedAt ?? task.updatedAt)) === day);
-  const earlier = snapshot.tasks.filter(task => task.status === 'planned' && task.plannedDate && task.plannedDate < today);
+  const earlier = snapshot.tasks.filter(task => task.status === 'planned' && task.plannedDate && task.plannedDate < today && task.plannedDate !== day);
   const inbox = snapshot.tasks.filter(task => task.status === 'inbox');
   const selectDay = (date: string) => { setDay(date); setWeek(monday(date)); if (new Date(`${date}T12:00:00`).getDay() % 6 === 0) setWholeWeek(true); };
   const taskRow = (task: Task) => <div className={`task-row ${task.status === 'completed' ? 'is-complete' : ''}`} key={task.id} data-testid={`task-${task.id}`}>
@@ -72,7 +71,7 @@ export default function Workspace() {
   const sync = snapshot.settings.calendarSync;
   const returnToday = () => { selectDay(today); };
   return <div className={`app-shell ${chatOpen ? 'with-chat' : ''}`}>
-    <aside className="sidebar"><div className="brand"><span className="brand-mark">m</span><span>Matthew<small>PLANNER</small></span></div><nav><button className={view === 'plan' ? 'selected' : ''} onClick={() => setView('plan')}><Icon name="sun"/>安排</button><button className={view === 'history' ? 'selected' : ''} onClick={() => setView('history')}><Icon name="history"/>回看</button></nav><div className="sidebar-bottom"><p><span className="status-dot"/>保存在这台电脑</p><button onClick={() => setModal({ type: 'settings' })}><Icon name="settings"/>设置</button><small>Matthew Planner · 0.2.0</small></div></aside>
+    <aside className="sidebar"><div className="brand"><span className="brand-mark">m</span><span>Matthew<small>PLANNER</small></span></div><nav><button className={view === 'plan' ? 'selected' : ''} onClick={() => setView('plan')}><Icon name="sun"/>安排</button><button className={view === 'history' ? 'selected' : ''} onClick={() => setView('history')}><Icon name="history"/>回看</button></nav><div className="sidebar-bottom"><p><span className="status-dot"/>保存在这台电脑</p><button onClick={() => setModal({ type: 'settings' })}><Icon name="settings"/>设置</button><small>Matthew Planner · 0.2.2</small></div></aside>
     <div className="planner-column"><header className="topbar"><span>{view === 'plan' ? '你的每日计划' : '做过的事情'}</span><div><button aria-label="撤销" className="text-button" disabled={!!busy || !snapshot.history.some(entry => !entry.undone && entry.origin !== 'undo' && entry.origin !== 'calendar')} onClick={() => void run('正在撤销', () => window.planner.undo())}><Icon name="undo"/>撤销</button><button className="secondary-button" disabled={!!busy} onClick={() => setModal({ type: 'mail' })}>检查求职邮件</button><button className="primary-button" data-testid="new-task" disabled={!!busy} onClick={() => setModal({ type: 'task' })}><Icon name="plus"/>添加任务</button><button className={`chat-toggle ${chatOpen ? 'selected' : ''}`} aria-label="打开对话" aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}><Icon name="chat"/></button></div></header>
       {error && <div className="error-banner" role="alert">{error}<button aria-label="关闭错误提示" onClick={() => setError('')}>×</button></div>}
       {busy && <div className="busy-line" role="status">{busy}…</div>}
@@ -81,8 +80,26 @@ export default function Workspace() {
         {(expanded && view === 'plan' || view === 'history') && <CalendarGrid days={days} snapshot={snapshot} events={view === 'plan' || overlayEvents} activities={view === 'history'} editActivity={activity => setModal({ type: 'activity', activity })} editEvent={event => { setDay(localDay(new Date(event.startAt))); if (event.source === 'local') setModal({ type: 'event', event }); }} moveActivity={(activity, start, end) => void apply([{ type: 'update_activity', activityId: activity.id, activity: { startAt: start, endAt: end, durationMinutes: (Date.parse(end) - Date.parse(start)) / 60000, confidence: 'inferred', source: 'ai_inferred' } }])}/>}
         <div className="sync-status"><span className={`status-dot ${sync.state === 'error' ? 'warning' : ''}`}/>{snapshot.settings.calendarConfigured ? `事情 · ${sync.state === 'syncing' ? '正在同步' : sync.state === 'error' ? '暂未更新，稍后重试' : sync.lastSuccess ? `${timeLabel(sync.lastSuccess)} 已同步` : '等待同步'}` : '连接 iCloud 后自动同步“事情”'}<button className="text-button" disabled={!!busy || !snapshot.settings.calendarConfigured} onClick={() => void run('正在更新日历', () => window.planner.syncCalendar())}>刷新</button>{sync.state === 'error' && <details><summary>详情</summary>{sync.message}</details>}</div>
       </section>
-      {view === 'plan' && <div className="day-layout"><section className="selected-day"><div className="page-heading"><h2>{dayTitle(day)}</h2><input aria-label="查看日期" type="date" value={day} onChange={event => { if (event.target.value) selectDay(event.target.value); }}/></div><section className="plan-section"><div className="section-heading"><h3>固定安排</h3><button className="text-button" disabled={!!busy} onClick={() => setModal({ type: 'event' })}>＋ 添加</button></div>{eventsFor(day).length ? eventsFor(day).map(event => eventRow(event)) : <p className="empty-line">这天没有固定安排。</p>}</section><section className="plan-section"><div className="section-heading"><h3>Todo</h3></div>{active.map(taskRow)}{!active.length && <p className="empty-line">没有待办，留一点空间给自己。</p>}<QuickTask busy={!!busy} add={async title => { await apply([{ type: 'create_task', task: { title, plannedDate: day } }]); }}/>{completed.length > 0 && <div className="completed-section"><button className="text-button" onClick={() => setShowCompleted(!showCompleted)}>{showCompleted ? '▾' : '▸'} 已完成 · {completed.length}</button>{showCompleted && completed.map(taskRow)}</div>}</section><DailyNotes key={day} value={snapshot.dayNotes.find(note => note.id === day)?.text ?? ''} busy={!!busy} save={text => apply([{ type: 'set_day_note', date: day, text }])}/>{day === today && earlier.length > 0 && <details className="earlier-work"><summary>之前未完成 · {earlier.length}</summary>{earlier.map(task => <div key={task.id}><small>{task.plannedDate}</small>{taskRow(task)}</div>)}</details>}{inbox.length > 0 && <details className="earlier-work"><summary>未定日期 · {inbox.length}</summary>{inbox.map(taskRow)}</details>}</section>
-        <aside className="next-day"><h2>{day === today ? '明天' : '次日'} · {dayTitle(addDays(day, 1))}</h2><p className="subtle">固定安排</p>{eventsFor(addDays(day, 1)).length ? eventsFor(addDays(day, 1)).map(event => eventRow(event, true)) : <p className="empty-line">没有固定安排。</p>}</aside></div>}
+      {view === 'plan' && <div className="day-layout">
+        <section className="selected-day">
+          <div className="page-heading"><h2>{dayTitle(day)}</h2><input aria-label="查看日期" type="date" value={day} onChange={event => { if (event.target.value) selectDay(event.target.value); }}/></div>
+          <section className="plan-section"><div className="section-heading"><h3>固定安排</h3><button className="text-button" disabled={!!busy} onClick={() => setModal({ type: 'event' })}>＋ 添加</button></div>{eventsFor(day).length ? eventsFor(day).map(event => eventRow(event)) : <p className="empty-line">这天没有固定安排。</p>}</section>
+          <section className="plan-section" data-testid="day-todo"><div className="section-heading"><h3>Todo</h3></div>
+            {active.map(taskRow)}{completed.map(taskRow)}
+            {!active.length && !completed.length && <p className="empty-line">没有待办，留一点空间给自己。</p>}
+            <QuickTask busy={!!busy} add={async title => { await apply([{ type: 'create_task', task: { title, plannedDate: day } }]); }}/>
+          </section>
+          <DailyNotes key={day} value={snapshot.dayNotes.find(note => note.id === day)?.text ?? ''} busy={!!busy} save={text => apply([{ type: 'set_day_note', date: day, text }])}/>
+        </section>
+        <aside className="day-sidebar">
+          <section className="next-day"><h2>{day === today ? '明天' : '次日'} · {dayTitle(addDays(day, 1))}</h2><p className="subtle">固定安排</p>{eventsFor(addDays(day, 1)).length ? eventsFor(addDays(day, 1)).map(event => eventRow(event, true)) : <p className="empty-line">没有固定安排。</p>}</section>
+          <section className="backlog-panel" aria-label="其他 Todo"><h3>其他 Todo</h3>
+            {earlier.length > 0 && <details className="earlier-work" open><summary>之前未完成 · {earlier.length}</summary>{earlier.map(task => <div key={task.id}><small>{task.plannedDate}</small>{taskRow(task)}</div>)}</details>}
+            {inbox.length > 0 && <details className="earlier-work" open><summary>未定日期 · {inbox.length}</summary>{inbox.map(taskRow)}</details>}
+            {!earlier.length && !inbox.length && <p className="empty-line">暂时没有其他待办。</p>}
+          </section>
+        </aside>
+      </div>}
       </main>
     </div>
     {chatOpen && <aside className="chat-panel" aria-label="AI Planner"><header className="chat-heading"><Icon name="chat"/><div><h2>一起计划</h2><small>{snapshot.settings.aiConfigured ? '明确指令直接更新，可撤销' : '离线 · 支持简单指令'}</small></div><button aria-label="收起对话" onClick={() => setChatOpen(false)}>×</button></header><div className="chat-messages">{!snapshot.messages.length && <div className="chat-intro"><h3>今天有什么变化？</h3><p>告诉我做完了什么，或者接下来想做什么。</p></div>}{snapshot.messages.map(message => <article className={`message ${message.role}`} key={message.id}><div className="message-label">{message.role === 'user' ? '你' : 'PLANNER'}<time>{timeLabel(message.createdAt)}</time></div><p>{message.content}</p>{snapshot.proposals.filter(proposal => proposal.id === message.proposalId).map(proposal => <div className={`proposal ${proposal.status}`} key={proposal.id}><span>{proposal.status === 'applied' ? '已更新计划' : proposal.status === 'cancelled' ? '已取消' : '之前的待确认修改'}</span>{proposal.status === 'pending' && <><ul>{proposal.actions.map((action, index) => <li key={index}>{actionLabel(action, snapshot)}</li>)}</ul><button disabled={!!busy} onClick={() => void run('正在应用修改', () => window.planner.applyProposal(proposal.id))}>应用</button><button disabled={!!busy} onClick={() => void run('正在取消', () => window.planner.cancelProposal(proposal.id))}>取消</button></>}</div>)}</article>)}<div ref={messagesEnd}/></div><form className="chat-composer" onSubmit={async event => { event.preventDefault(); const text = chatText.trim(); if (text && await run('正在思考', () => window.planner.chat(text))) setChatText(''); }}><label className="sr-only" htmlFor="planner-message">对话</label><textarea id="planner-message" data-testid="chat-input" value={chatText} onChange={event => setChatText(event.target.value)} placeholder="比如：简历改好了，把 portfolio 挪到明天" rows={6} disabled={!!busy} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}/><div><small>Enter 发送 · Shift + Enter 换行</small><button type="submit" className="send-button" aria-label="发送消息" disabled={!!busy || !chatText.trim()}><Icon name="arrow"/></button></div><p>相关计划内容会交给 AI 分析。完成记录只留在本地。</p></form></aside>}
@@ -104,8 +121,29 @@ function QuickTask({ busy, add }: { busy: boolean; add: (title: string) => Promi
 function DailyNotes({ value, busy, save }: { value: string; busy: boolean; save: (text: string) => Promise<boolean> }) {
   const [text, setText] = useState(value);
   const saved = useRef(value);
+  const textarea = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const before = saved.current; setText(previous => previous === before ? value : previous); saved.current = value; }, [value]);
-  return <section className="daily-notes"><h3>Notes</h3><textarea aria-label="每日 Notes" rows={3} maxLength={50000} placeholder="随手记下今天的想法、进展和链接…" value={text} disabled={busy} onChange={event => setText(event.target.value)}/>{text !== value && <button className="secondary-button" disabled={busy} onClick={() => void save(text)}>保存 Notes</button>}</section>;
+  useLayoutEffect(() => {
+    const input = textarea.current;
+    if (!input) return;
+    const resize = () => {
+      input.style.height = 'auto';
+      const style = getComputedStyle(input);
+      const borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+      input.style.height = `${Math.max(parseFloat(style.minHeight), input.scrollHeight + borders)}px`;
+    };
+    resize();
+    // Width changes (including opening chat) can wrap existing text into more
+    // lines. Ignore height-only notifications from our own resize.
+    let observedWidth = -1;
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0]?.contentRect.width;
+      if (width !== undefined && width !== observedWidth) { observedWidth = width; resize(); }
+    });
+    if (input.parentElement) observer.observe(input.parentElement);
+    return () => observer.disconnect();
+  }, [text]);
+  return <section className="daily-notes"><h3>Notes</h3><textarea ref={textarea} aria-label="每日 Notes" rows={6} maxLength={50000} placeholder="随手记下今天的想法、进展和链接…" value={text} disabled={busy} onChange={event => setText(event.target.value)}/>{text !== value && <button className="secondary-button" disabled={busy} onClick={() => void save(text)}>保存 Notes</button>}</section>;
 }
 function Dialog({ title, close, children, busy, error }: { title: string; close: () => void; children: ReactNode; busy: boolean; error: string }) {
   const ref = useRef<HTMLDivElement>(null);

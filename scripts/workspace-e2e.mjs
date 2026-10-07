@@ -45,6 +45,18 @@ try{
   await page.evaluate(()=>window.planner.undo());await page.reload();await ready(page);
   const undoneState=await state(page);assert.equal(undoneState.tasks.length,0);assert.equal(undoneState.activities.length,0);
   await createTask(page,'Portfolio',60);await createTask(page,'DRI follow-up',30);await createTask(page,'整理联系人');
+  await page.evaluate(async()=>{
+    const snapshot=await window.planner.snapshot(),date=new Date();date.setDate(date.getDate()-1);
+    const yesterday=`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    await window.planner.apply([{type:'create_task',task:{title:'之前未完成测试',plannedDate:yesterday}},{type:'create_task',task:{title:'未定日期测试'}}],snapshot.revision);
+  });
+  await page.reload();await ready(page);
+  await expect(page.locator('.day-sidebar .backlog-panel')).toContainText('之前未完成测试');
+  await expect(page.locator('.day-sidebar .backlog-panel')).toContainText('未定日期测试');
+  await expect(page.locator('.selected-day .earlier-work')).toHaveCount(0);
+  const tomorrowBox=await page.locator('.next-day').boundingBox(),backlogBox=await page.locator('.backlog-panel').boundingBox(),selectedBox=await page.locator('.selected-day').boundingBox();
+  assert.ok(backlogBox.y>=tomorrowBox.y+tomorrowBox.height,'Other Todo panel sits below next-day commitments');
+  assert.ok(backlogBox.x>=selectedBox.x+selectedBox.width,'Other Todo panel sits in the right column');
   assert.equal((await state(page)).tasks.find(task=>task.title==='整理联系人').estimatedDurationMinutes,undefined);
   await expect(page.getByTestId('week-overview')).not.toContainText('Portfolio');
   await expect(page.locator('.stats')).toHaveCount(0);
@@ -59,6 +71,10 @@ try{
   await page.getByRole('button',{name:'收起对话',exact:true}).click();
   await page.getByRole('button',{name:'完成 DRI follow-up',exact:true}).click();await ready(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);snap=await state(page);assert.equal(snap.activities.length,1);assert.equal(snap.activities[0].confidence,'inferred');assert.equal(snap.activities[0].durationMinutes,30);
+  const completedRow=page.getByTestId('day-todo').locator('.task-row').last();
+  await expect(completedRow).toContainText('DRI follow-up');await expect(completedRow.locator('.completion-toggle')).toHaveText('✓');
+  assert.equal(await completedRow.locator('.task-title').evaluate(title=>getComputedStyle(title).textDecorationLine),'none');
+  await expect(page.locator('.completed-section')).toHaveCount(0);await expect(page.getByText(/^已完成 ·/)).toHaveCount(0);
   await page.getByRole('button',{name:'恢复 DRI follow-up',exact:true}).click();await ready(page);assert.equal((await state(page)).activities.length,0);
   await page.getByRole('button',{name:'撤销',exact:true}).click();await ready(page);assert.equal((await state(page)).activities.length,1);
   await page.getByRole('button',{name:'打开对话',exact:true}).click();await chat(page,'DRI follow-up done');assert.equal((await state(page)).activities.length,1);
@@ -69,7 +85,15 @@ try{
   await page.getByRole('button',{name:'刷新',exact:true}).isDisabled();
   await page.reload();await expect(page.locator('.next-day')).toContainText('明日电话面试');await expect(page.locator('.selected-day .event-time').first()).toHaveText('09:00');
   await expect(page.getByTestId('week-overview')).not.toContainText('整理联系人');
-  await page.getByLabel('每日 Notes').fill('简历已提交，滑雪邮件保留两家。');await page.getByRole('button',{name:'保存 Notes',exact:true}).click();await ready(page);assert.equal((await state(page)).dayNotes[0].text,'简历已提交，滑雪邮件保留两家。');
+  const notes=page.getByLabel('每日 Notes'),noteHeight=()=>notes.evaluate(input=>input.getBoundingClientRect().height);
+  const minimumNoteHeight=await noteHeight();assert.ok(minimumNoteHeight>=184,'Notes starts at double the old height');
+  const longNotes=Array.from({length:22},(_,index)=>`记录 ${index+1}：项目准备和面试进展。`).join('\n');
+  await notes.fill(longNotes);await expect.poll(noteHeight).toBeGreaterThan(minimumNoteHeight);
+  assert.ok(await notes.evaluate(input=>input.scrollHeight<=input.clientHeight+1),'Notes fits content without an inner scrollbar');
+  await page.getByRole('button',{name:'保存 Notes',exact:true}).click();await ready(page);
+  await page.reload();await ready(page);await expect(notes).toHaveValue(longNotes);await expect.poll(noteHeight).toBeGreaterThan(minimumNoteHeight);
+  await notes.fill('简历已提交，滑雪邮件保留两家。');await expect.poll(noteHeight).toBe(minimumNoteHeight);
+  await page.getByRole('button',{name:'保存 Notes',exact:true}).click();await ready(page);assert.equal((await state(page)).dayNotes[0].text,'简历已提交，滑雪邮件保留两家。');
   await page.screenshot({path:'test-results/workspace-plan.png'});
   await page.getByRole('button',{name:'展开周日历',exact:true}).click();await expect(page.getByTestId('calendar-grid')).toBeVisible();await expect(page.locator('.current-time')).toHaveCount(1);await page.getByRole('button',{name:'收起周日历',exact:true}).click();
   await page.getByRole('button',{name:'回看',exact:true}).click();await expect(page.locator('.activity-block')).toHaveCount(1);assert.equal((await state(page)).fixedEvents.length,2);

@@ -20,6 +20,8 @@
 | A4 | Lead | Complete; live model evaluation pending | A3 | ai, core, db, tests | Preserve clarification thread and pasted Notes; missing completed task requires no user-supplied ID; atomic history/dedup/undo |
 | W1 | Lead | Complete; user Work connection setup pending | D2 A4 | services/local-bridge, main, scripts/planner, tests/bridge, WORK_INPUT | Connected Codex/Work local inbox, credential-free snapshot, audited/reversible actions, durable retry receipts, revision checks; no cloud server or iCloud write path |
 | I3 | Lead | Complete; 0.2.1 Windows verification passes | A4 W1 | scripts, docs, release | 119 regressions, type/lint, production build, dev/packaged real CLI-to-desktop delivery/retry/undo/redaction/restart; portable output |
+| U3 | Lead | Complete | U2 W1 | Workspace, workspace.css, desktop script | Checked completion at Todo bottom without strike-through/header; Notes double height/content resize; right-side backlog card below next-day events |
+| I4 | Lead | Complete; 0.2.2 Windows verification passes | U3 | scripts, docs, release | 119 tests, type/lint/build, dev/packaged desktop layout/Notes persistence checks, visual review at full and narrow widths, Windows portable |
 
 Git author identity uses Matthew Ren and the approved GitHub noreply address for public commits. First three agents started with exclusive directory ownership before a base commit could be made; calendar used an isolated agent/calendar worktree, subsequently removed after integration. The public repository is https://github.com/mren2222/MatthewPlanner. Original pre-publication history is retained on a local backup branch. Live providers require user-supplied credentials, which are not blockers for offline MVP.
 
