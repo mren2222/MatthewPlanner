@@ -57,8 +57,10 @@ export function assertFixedEvent(value: unknown): asserts value is FixedEvent {
 function appleUrl(input: string, base = 'https://caldav.icloud.com/'): URL {
   let url: URL;
   try { url = new URL(input, base); } catch { throw new CalendarError('Invalid iCloud calendar address.'); }
-  if (url.protocol !== 'https:' || !(url.hostname === 'icloud.com' || url.hostname.endsWith('.icloud.com')) || url.username || url.password || (url.port && url.port !== '443')) {
-    throw new CalendarError('Calendar connections require a secure iCloud address.');
+  const iCloudHost = ['icloud.com', 'icloud.com.cn'].some(domain => url.hostname === domain || url.hostname.endsWith(`.${domain}`));
+  if (url.protocol !== 'https:' || !iCloudHost || url.username || url.password || (url.port && url.port !== '443')) {
+    // Report only protocol and host; paths/query strings can contain private account data.
+    throw new CalendarError(`Calendar connections require a secure iCloud address. Blocked ${url.protocol}//${url.host}.`);
   }
   return url;
 }

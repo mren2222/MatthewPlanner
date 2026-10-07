@@ -159,8 +159,42 @@ describe('iCloud discovery, snapshots and writes', () => {
 });
 
 describe('secure transport', () => {
+  it('allows Apple mainland-China discovery redirects and calendar collections over HTTPS', async () => {
+    const baseline = mockedProvider();
+    const chinaCalendar = calendarId.replace('.icloud.com', '.icloud.com.cn');
+    const transport = vi.fn<typeof fetch>(async (input, init) => {
+      const response = await baseline.transport(input, init);
+      if (String(input).includes('.well-known')) return new Response(null, { status: 301, headers: { location: 'https://p01-caldav.icloud.com.cn/' } });
+      return response;
+    });
+    const provider = new ICloudCalendarProvider({ username: 'example-user', password: 'test-only-placeholder', fetch: transport });
+    expect(await provider.listCalendars()).toEqual([{ id: chinaCalendar, name: 'Work' }]);
+    expect(await provider.listEvents(chinaCalendar)).toHaveLength(1);
+    expect(transport.mock.calls.some(([input]) => new URL(String(input)).hostname === 'p01-caldav.icloud.com.cn')).toBe(true);
+  });
+  it('keeps rejected-address diagnostics free of credentials, account paths and query values', async () => {
+    const transport = vi.fn<typeof fetch>();
+    const result = secureICloudFetch(transport)('https://private-user:private-password@attacker.example/private-account?token=private-token');
+    await expect(result).rejects.toThrow('Blocked https://attacker.example.');
+    expect(transport).toHaveBeenCalledTimes(0);
+  });
+  it('accepts a China calendar home discovered from the global entry point', async () => {
+    const baseline = mockedProvider();
+    const chinaCalendar = calendarId.replace('.icloud.com', '.icloud.com.cn');
+    const transport: typeof fetch = async (input, init) => {
+      const body = String(init?.body ?? '');
+      if (body.includes('calendar-home-set')) return multi(xml('/account/principal/', '<c:calendar-home-set><d:href>https://p01-caldav.icloud.com.cn/account/calendars/</d:href></c:calendar-home-set>'));
+      if (init?.method === 'PROPFIND' && !body.includes('current-user-principal') && !body.includes('supported-report-set') && !String(input).includes('.well-known')) {
+        return multi(xml(chinaCalendar, '<d:resourcetype><d:collection/><c:calendar/></d:resourcetype><d:displayname>Work</d:displayname>'));
+      }
+      return baseline.transport(input, init);
+    };
+    const provider = new ICloudCalendarProvider({ username: 'example-user', password: 'test-only-placeholder', fetch: transport });
+    expect(await provider.listCalendars()).toEqual([{ id: chinaCalendar, name: 'Work' }]);
+    expect(await provider.listEvents(chinaCalendar)).toHaveLength(1);
+  });
   it('blocks insecure and non-iCloud redirects before credentials leave the allowed hosts', async () => {
-    for (const target of ['http://caldav.icloud.com/', 'https://icloud.com.attacker.example/', 'https://attacker.example/', 'https://user:pass@caldav.icloud.com/']) {
+    for (const target of ['http://caldav.icloud.com/', 'http://caldav.icloud.com.cn/', 'https://icloud.com.attacker.example/', 'https://icloud.com.cn.attacker.example/', 'https://attackericloud.com.cn/', 'https://attacker.example/', 'https://user:pass@caldav.icloud.com/', 'https://p01-caldav.icloud.com.cn:8443/']) {
       const fetchMock = vi.fn<typeof fetch>(async () => new Response(null, { status: 302, headers: { location: target } }));
       await expect(secureICloudFetch(fetchMock)('https://caldav.icloud.com/', { headers: { authorization: 'Basic placeholder' } })).rejects.toThrow('secure iCloud');
       expect(fetchMock).toHaveBeenCalledTimes(1);

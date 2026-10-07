@@ -4,7 +4,7 @@ A local-first Windows desktop planner. Flexible tasks have a **planned day and e
 
 ## Launch
 
-- Portable application: `release/Matthew Planner 0.1.0.exe`.
+- Portable application: `release/Matthew Planner 0.1.1.exe`.
 - Application folder: double-click `release/win-unpacked/Matthew Planner.exe`. Keep the whole win-unpacked folder together.
 - These are local, unsigned Windows x64 builds. No account or API key is required for local planning.
 
@@ -70,6 +70,6 @@ Electron main owns SQLite, OS-encrypted credentials, AI and CalDAV networking. T
 
 SQLite runs through sql.js to avoid native ABI/rebuild dependencies. The persistent file is ordinary SQLite, with schema version 1 and one main-process writer. Whole-file atomic persistence is appropriate for this personal MVP; very large databases should move to a native SQLite implementation.
 
-Validation includes 68 unit/presentation/provider tests, TypeScript, lint, production and development builds, and the packaged Windows executable's desktop flows, including restart persistence and DPAPI credential storage. Provider tests use mocked responses; no real API/calendar credentials are in fixtures. Independent review findings and fixes are recorded in [review notes](docs/REVIEW.md).
+Validation includes 71 unit/presentation/provider tests, TypeScript, lint, production and development builds, and the packaged Windows executable's desktop flows, including restart persistence and DPAPI credential storage. Provider tests use mocked responses, including mainland-China iCloud discovery; no real API/calendar credentials are in fixtures. Independent review findings and fixes are recorded in [review notes](docs/REVIEW.md).
 
 See [product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), [contracts](docs/CONTRACTS.md), [decisions](docs/DECISIONS.md), [backlog](docs/TASKS.md), and [acceptance examples](docs/TEST_CASES.md).
