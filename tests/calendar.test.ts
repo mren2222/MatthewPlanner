@@ -177,4 +177,10 @@ describe('secure transport', () => {
     const transport: typeof fetch = async (_input, init) => new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('abort')), { once: true }));
     await expect(secureICloudFetch(transport, 5)('https://caldav.icloud.com/')).rejects.toThrow('timed out');
   });
+  it('keeps GET response-body consumption within the same timeout', async () => {
+    const transport: typeof fetch = async (_input, init) => new Response(new ReadableStream({
+      start(controller) { init?.signal?.addEventListener('abort', () => controller.error(new Error('body aborted')), { once: true }); },
+    }));
+    await expect(secureICloudFetch(transport, 5)('https://caldav.icloud.com/event.ics', { method: 'GET' })).rejects.toThrow('timed out');
+  });
 });

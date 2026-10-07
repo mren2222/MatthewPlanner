@@ -88,10 +88,10 @@ export function secureICloudFetch(transport: typeof globalThis.fetch, timeoutMs 
         if (response.status === 403) throw new CalendarError('iCloud denied calendar access. Check calendar sharing permissions.');
         if (response.status === 412) throw new CalendarError('The calendar event changed elsewhere. Refresh before trying again.', 412);
         if (!response.ok) throw new CalendarError(`iCloud calendar request failed (HTTP ${response.status}).`);
-        // Consume DAV bodies before clearing the timeout; a stalled body must also time out.
-        if ((request.method ?? 'GET') === 'PROPFIND' || request.method === 'REPORT') {
+        // Consume every body before clearing the timeout, including reconciliation.
+        if ((request.method ?? 'GET') !== 'HEAD' && ![204,205].includes(response.status)) {
           const body = await response.text();
-          if (response.status === 207 && !/<(?:[\w-]+:)?multistatus[\s/>]/i.test(body)) throw new CalendarError('iCloud returned an invalid calendar response. Previous imported events were kept.');
+          if (['PROPFIND', 'REPORT'].includes(request.method ?? '') && response.status === 207 && !/<(?:[\w-]+:)?multistatus[\s/>]/i.test(body)) throw new CalendarError('iCloud returned an invalid calendar response. Previous imported events were kept.');
           return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
         }
         return response;

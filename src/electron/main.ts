@@ -11,6 +11,7 @@ import { localDate } from '../core/dates';
 import { createPlannerReply, reviewToday } from '../ai';
 import { redactText } from '../ai/context';
 import { CredentialVault, type PrivateSettings } from './credentials';
+import { ICloudCalendarProvider, type CalendarProvider } from '../calendar';
 
 app.setName('Matthew Planner');
 const testMode = process.env.PLANNER_E2E === '1';
@@ -22,6 +23,7 @@ let store: PlannerStore;
 let actions: ActionService;
 let vault: CredentialVault;
 let config: PrivateSettings = {};
+let calendar: CalendarProvider | undefined;
 let queue: Promise<unknown> = Promise.resolve();
 const devURL = !app.isPackaged ? process.env.PLANNER_DEV_URL : undefined;
 const uiPath = join(__dirname, '../ui/index.html');
@@ -37,6 +39,11 @@ function snapshot(): PlannerSnapshot {
     calendarId: config.calendarId, appleAccount: config.appleAccount,
     secureStorageAvailable: vault.available()
   } };
+}
+function calendarProvider(): CalendarProvider {
+  if (!config.appleAccount || !config.applePassword) throw new Error('Connect iCloud in Settings using your Apple Account and an app-specific password.');
+  calendar ??= new ICloudCalendarProvider({ username: config.appleAccount, password: config.applePassword, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+  return calendar;
 }
 function context(): PlannerContext {
   const data = store.snapshotData();
@@ -132,11 +139,24 @@ async function start(): Promise<void> {
     if (settings.clearCalendar) { delete next.appleAccount; delete next.applePassword; delete next.calendarId; }
     for (const name of ['openaiKey', 'aiModel', 'appleAccount', 'applePassword', 'calendarId'] as const) if (settings[name]?.trim()) next[name] = settings[name]!.trim();
     if (next.appleAccount !== config.appleAccount) delete next.calendarId;
-    vault.write(next); config = next; return snapshot();
+    vault.write(next); config = next; calendar = undefined; return snapshot();
   });
-  handle('listCalendars', () => { throw new Error('Calendar integration is being initialized.'); });
-  handle('syncCalendar', () => { throw new Error('Calendar integration is being initialized.'); });
-  handle('publishEvent', () => { throw new Error('Calendar integration is being initialized.'); });
+  handle('listCalendars', () => calendarProvider().listCalendars());
+  handle('syncCalendar', async () => {
+    if (!config.calendarId) throw new Error('Choose and save a calendar in Settings first.');
+    const events = await calendarProvider().listEvents(config.calendarId);
+    store.importEvents(events, config.calendarId); return snapshot();
+  });
+  handle('publishEvent', async (input: unknown) => {
+    const id = z.string().uuid().parse(input);
+    const data = store.snapshotData();
+    const event = data.fixedEvents.find(value => value.id === id);
+    if (!event || event.source !== 'local') throw new Error('Choose a local fixed event to publish.');
+    if (!config.calendarId) throw new Error('Choose and save an iCloud calendar in Settings first.');
+    const result = await calendarProvider().createEvent(config.calendarId, event);
+    store.updatePublishedEvent(id, { externalId: result.externalId, calendarProvider: result.calendarProvider, calendarId: result.calendarId, etag: result.etag }, data.revision);
+    return snapshot();
+  });
   if (!testMode && new Date().getHours() >= 18 && store.snapshotData().tasks.some(t => t.plannedDate === localDate() && t.status === 'planned')) {
     const already = store.snapshotData().messages.some(m => m.role === 'assistant' && m.content.startsWith('Daily check-in') && localDate(new Date(m.createdAt)) === localDate());
     if (!already) { const reply = reviewToday(context()); saveReply({ ...reply, message: `Daily check-in\n${reply.message}` }, 'Late-day check-in', store.snapshotData().revision); }
