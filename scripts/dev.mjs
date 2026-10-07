@@ -1,0 +1,18 @@
+import { build } from 'esbuild';
+import { createServer } from 'vite';
+import { spawn } from 'node:child_process';
+import electron from 'electron';
+import { mkdir, copyFile } from 'node:fs/promises';
+await mkdir('dist/electron', { recursive: true });
+await build({ entryPoints: ['src/electron/main.ts'], bundle: true, platform: 'node', format: 'cjs', target: 'node22', outfile: 'dist/electron/main.cjs', external: ['electron', 'sql.js'], sourcemap: true });
+await build({ entryPoints: ['src/electron/preload.ts'], bundle: true, platform: 'node', format: 'cjs', target: 'node22', outfile: 'dist/electron/preload.cjs', external: ['electron'] });
+await copyFile('node_modules/sql.js/dist/sql-wasm.wasm', 'dist/electron/sql-wasm.wasm');
+const server = await createServer();
+await server.listen();
+const env = { ...process.env, PLANNER_DEV_URL: 'http://127.0.0.1:5173' };
+delete env.ELECTRON_RUN_AS_NODE;
+const child = spawn(electron, ['.'], { stdio: 'inherit', env, windowsHide: true });
+const cleanup = async () => { child.kill(); await server.close(); };
+child.on('exit', async code => { await server.close(); process.exit(code ?? 0); });
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);
