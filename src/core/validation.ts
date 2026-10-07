@@ -43,7 +43,10 @@ export const activityInputSchema = z.object({
 const action = z.discriminatedUnion('type', [
   z.object({ type: z.literal('create_task'), task: taskInput }).strict(),
   z.object({ type: z.literal('update_task'), taskId: id, patch: taskPatch }).strict(),
-  z.object({ type: z.literal('complete_task'), taskId: id, activity: activityInputSchema.optional() }).strict(),
+  z.object({ type: z.literal('complete_task'), taskId: id, activity: activityInputSchema.optional(), completedDate: localDateSchema.optional() }).strict(),
+  z.object({ type: z.literal('reopen_task'), taskId: id }).strict(),
+  z.object({ type: z.literal('set_day_note'), date: localDateSchema, text: z.string().max(50000) }).strict(),
+  z.object({ type: z.literal('update_activity'), activityId: id, activity: activityInputSchema }).strict(),
   z.object({ type: z.literal('cancel_task'), taskId: id }).strict(),
   z.object({ type: z.literal('move_task'), taskId: id, plannedDate: localDateSchema }).strict(),
   z.object({ type: z.literal('change_estimate'), taskId: id, estimatedDurationMinutes: minutes }).strict(),
@@ -59,5 +62,5 @@ export function validateActions(input: unknown): ProposedAction[] {
 export const fixedEventSchema = z.object({
   ...eventFields, id, source: z.enum(['local', 'icloud']), externalId: id.optional(),
   calendarProvider: id.optional(), calendarId: id.optional(), etag: z.string().max(4096).optional(),
-  createdAt: timestampSchema, updatedAt: timestampSchema,
+  createdAt: timestampSchema, updatedAt: timestampSchema, allDay: z.boolean().optional(),
 }).strict().refine(value => Date.parse(value.endAt) > Date.parse(value.startAt), 'Event end must follow start');

@@ -7,7 +7,7 @@ export interface EncryptionBackend {
   decryptString(value: Buffer): string;
   getSelectedStorageBackend?(): string;
 }
-export interface PrivateSettings { openaiKey?: string; aiModel?: string; aiModelPreferenceVersion?: number; appleAccount?: string; applePassword?: string; calendarId?: string }
+export interface PrivateSettings { openaiKey?: string; aiModel?: string; aiModelPreferenceVersion?: number; appleAccount?: string; applePassword?: string; calendarId?: string; calendarName?: string; gmailClientId?: string; gmailClientSecret?: string; gmailRefreshToken?: string; gmailQuery?: string }
 export class CredentialVault {
   constructor(private readonly path: string, private readonly backend: EncryptionBackend) {}
   available(): boolean { return this.backend.isEncryptionAvailable() && this.backend.getSelectedStorageBackend?.() !== 'basic_text'; }

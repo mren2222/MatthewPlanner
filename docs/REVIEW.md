@@ -1,5 +1,15 @@
 # Independent review
 
+## Lead review of approved 0.2.0 redesign
+
+Shared contracts and ownership were updated by Lead. 108 regressions, typecheck, lint, production build and isolated development/packaged desktop workflows pass. No agent delegation or authenticated live provider test was performed in this iteration.
+
+Review corrections: constrain chat scrolling to its own panel and grid row; do not claim actions were applied when discussion/clarification suppressed them; idempotent completion and reversible generated activity; preserve independent activity on reopen; keep unchanged calendar imports from churning revision/audit; allow missing read-only ETags and optional failed DAV properties while preserving conditional-write requirements; recover missing object data without treating it as deletion; retain source/thread metadata across email edits; reject email completion/unrelated actions atomically; persist processed IDs with undo. UI/AI context shows the selected calendar while retaining other cached collections in storage.
+
+All-day events preserve their date representation. Local completion history uses internal source/confidence but plain time labels per user preference. Main still owns database, secrets, provider networking and secure browser links. No task/activity reaches CalendarProvider. Selected-email text is bounded/redacted and is not trusted as instructions. OAuth uses loopback/state/PKCE and only Gmail readonly. Provider exception details remain suppressed.
+
+Limitations: Gmail needs the user's own Desktop OAuth setup and consent; live AI and the newly reported iCloud failure still need user-context verification. Imports are limited to selected messages and a recent search window; duplicate/thread matching is conservative and ambiguous changes remain unprocessed. Automatic iCloud refresh runs only while open. Prior MVP review below is historical.
+
 A fresh native reviewer inspected domain boundaries, persistence, AI proposals, secrets, Electron/IPC and the isolated calendar implementation. No flexible-task calendar synchronization or direct AI database mutation was found.
 
 | Finding | Resolution | Evidence |

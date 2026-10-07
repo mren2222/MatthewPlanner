@@ -11,6 +11,10 @@ const api: PlannerAPI = {
   saveSettings: settings => ipcRenderer.invoke('planner:saveSettings', settings),
   listCalendars: () => ipcRenderer.invoke('planner:listCalendars'),
   syncCalendar: () => ipcRenderer.invoke('planner:syncCalendar'),
-  publishEvent: eventId => ipcRenderer.invoke('planner:publishEvent', eventId)
+  publishEvent: eventId => ipcRenderer.invoke('planner:publishEvent', eventId),
+  connectGmail: () => ipcRenderer.invoke('planner:connectGmail'),
+  listMail: () => ipcRenderer.invoke('planner:listMail'),
+  importMail: ids => ipcRenderer.invoke('planner:importMail', ids),
+  openLink: url => ipcRenderer.invoke('planner:openLink', url)
 };
 contextBridge.exposeInMainWorld('planner', api);

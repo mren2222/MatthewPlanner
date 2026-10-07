@@ -32,6 +32,10 @@ describe('strict action boundary', () => {
 });
 
 describe('persistent action transactions', () => {
+  it('does not change revision or audit history on an unchanged periodic calendar refresh', async () => {
+    const {store}=await setup();store.importEvents([event('same')],'primary');const before=store.snapshotData();
+    store.importEvents([{...event('same'),createdAt:'2026-10-07T01:00:00Z',updatedAt:'2026-10-07T01:00:00Z'}],'primary');expect(store.snapshotData()).toEqual(before);
+  });
   it('persists SQLite tasks, messages, proposals, revision and before/after audits across restart', async () => {
     const { store, path } = await setup();
     store.apply([{ type: 'create_task', task: { title: 'Read', plannedDate: '2026-10-07', estimatedDurationMinutes: 30 } }], 0, 'manual');
@@ -116,8 +120,8 @@ describe('persistent action transactions', () => {
   it('records a schema version and rejects newer databases without changing their bytes', async () => {
     const { store, path } = await setup(); store.close();
     const SQL = await initSqlJs(); const db = new SQL.Database(readFileSync(path));
-    expect(db.exec('PRAGMA user_version')[0].values[0][0]).toBe(1);
-    db.run('PRAGMA user_version = 2');
+    expect(db.exec('PRAGMA user_version')[0].values[0][0]).toBe(2);
+    db.run('PRAGMA user_version = 3');
     const { writeFileSync } = await import('node:fs'); writeFileSync(path, db.export()); db.close();
     const previous = readFileSync(path);
     await expect(createStore(path)).rejects.toThrow('newer Matthew Planner version');

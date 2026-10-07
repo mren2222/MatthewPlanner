@@ -3,15 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, openSync, writeFileSync, fsyncSync, closeSync, renameSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { z } from 'zod';
-import type { ActivityInput, ActivityRecord, AuditEntry, ChatMessage, FixedEvent, PlannerSnapshot, Proposal, ProposedAction, Task } from '../core/types';
+import type { ActivityInput, ActivityRecord, AuditEntry, ChatMessage, DayNote, FixedEvent, PlannerSnapshot, Proposal, ProposedAction, Task } from '../core/types';
 import { fixedEventSchema, timestampSchema, validateActions } from '../core/validation';
+import { completionActivity } from '../services/completion';
 
 type Data = Omit<PlannerSnapshot, 'settings'>;
-type Entity = Task | FixedEvent;
-type Table = 'tasks' | 'events' | 'activities';
+type Entity = Task | FixedEvent | DayNote | ActivityRecord;
+type Table = 'tasks' | 'events' | 'activities' | 'days' | 'emails';
 interface Change { table: Table; id: string; before: string | null; after: string | null }
 interface Batch { id: string; origin: 'manual' | 'ai' | 'calendar'; changes: Change[]; undone: boolean }
-const tables = ['tasks', 'events', 'activities', 'history', 'messages', 'proposals', 'batches'] as const;
+const tables = ['tasks', 'events', 'activities', 'days', 'emails', 'history', 'messages', 'proposals', 'batches'] as const;
 const messageSchema = z.object({ id: z.string().min(1), role: z.enum(['user', 'assistant']), content: z.string().min(1).max(100000), createdAt: timestampSchema, proposalId: z.string().min(1).optional() }).strict();
 const proposalSchema = z.object({ id: z.string().min(1), message: z.string().min(1).max(100000), actions: z.unknown(), clarification: z.string().optional(), baseRevision: z.number().int().nonnegative(), sourceMessage: z.string(), status: z.enum(['pending', 'applied', 'cancelled']), createdAt: timestampSchema }).strict();
 
@@ -21,11 +22,11 @@ export class PlannerStore {
   private changes: Map<string, Change> | undefined;
   constructor(private db: Database, private SQL: SqlJsStatic, private filePath: string) {
     const version = Number(this.db.exec('PRAGMA user_version')[0].values[0][0]);
-    if (version > 1) throw new Error('This database was created by a newer Matthew Planner version. Update the app before opening it.');
+    if (version > 2) throw new Error('This database was created by a newer Matthew Planner version. Update the app before opening it.');
     for (const table of tables) this.db.run(`CREATE TABLE IF NOT EXISTS ${table} (id TEXT PRIMARY KEY, data TEXT NOT NULL)`);
     this.db.run('CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
     this.db.run("INSERT OR IGNORE INTO metadata VALUES ('revision', '0')");
-    this.db.run('PRAGMA user_version = 1');
+    this.db.run('PRAGMA user_version = 2');
     this.persist();
   }
   private assertOpen() { if (this.closed) throw new Error('Planner store is closed'); }
@@ -51,10 +52,10 @@ export class PlannerStore {
   }
   private remove(table: Table, id: string) { this.track(table, id, null); this.db.run(`DELETE FROM ${table} WHERE id=?`, [id]); }
   private track(table: typeof tables[number], id: string, after: string | null) {
-    if (!this.changes || (table !== 'tasks' && table !== 'events' && table !== 'activities')) return;
+    if (!this.changes || !['tasks', 'events', 'activities', 'days', 'emails'].includes(table)) return;
     const key = `${table}:${id}`;
     const previous = this.changes.get(key);
-    this.changes.set(key, { table, id, before: previous ? previous.before : this.raw(table, id), after });
+    this.changes.set(key, { table: table as Table, id, before: previous ? previous.before : this.raw(table, id), after });
   }
   private persist() {
     mkdirSync(dirname(this.filePath), { recursive: true });
@@ -80,7 +81,7 @@ export class PlannerStore {
   }
   snapshotData(): Data {
     this.assertOpen();
-    return { revision: this.revision, tasks: this.all('tasks'), fixedEvents: this.all('events'), activities: this.all('activities'), history: this.all('history'), messages: this.all('messages'), proposals: this.all('proposals') };
+    return { revision: this.revision, tasks: this.all('tasks'), fixedEvents: this.all('events'), activities: this.all('activities'), dayNotes: this.all('days'), history: this.all('history'), messages: this.all('messages'), proposals: this.all('proposals') };
   }
   private audit(batchId: string, actionType: string, entityId: string, before: Entity | null, after: Entity | null, origin: AuditEntry['origin'], sourceMessage?: string) {
     const entry: AuditEntry = { id: randomUUID(), batchId, actionType, entityId, before, after, timestamp: new Date().toISOString(), origin, undone: false, ...(sourceMessage ? { sourceMessage } : {}) };
@@ -115,10 +116,15 @@ export class PlannerStore {
     });
     return this.snapshotData();
   }
-  private addActivity(task: Task, input: ActivityInput, now: string) {
-    const activity: ActivityRecord = { ...input, id: randomUUID(), taskId: task.id, createdAt: now };
+  private addActivity(task: Task, input: ActivityInput, now: string, completionGenerated = false) {
+    const activity: ActivityRecord = { ...input, id: randomUUID(), taskId: task.id, createdAt: now, completionGenerated };
     this.write('activities', activity.id, activity);
+    this.refreshActivity(task);
+  }
+  private refreshActivity(task: Task) {
     const records = this.all<ActivityRecord>('activities').filter(record => record.taskId === task.id);
+    delete task.actualDurationMinutes; delete task.actualTimeConfidence; delete task.actualStart; delete task.actualEnd;
+    if (!records.length) return;
     task.actualDurationMinutes = records.reduce((total, record) => total + record.durationMinutes, 0);
     task.actualTimeConfidence = records.some(record => record.confidence === 'inferred') ? 'inferred' : records.some(record => record.confidence === 'approximate') ? 'approximate' : 'exact';
     const starts = records.flatMap(record => record.startAt ? [record.startAt] : []).sort((a, b) => Date.parse(a) - Date.parse(b));
@@ -128,6 +134,18 @@ export class PlannerStore {
   }
   private applyAction(action: ProposedAction, batchId: string, origin: 'manual' | 'ai', sourceMessage?: string) {
     const now = new Date().toISOString();
+    if (action.type === 'set_day_note') {
+      const before = this.raw('days', action.date) ? this.get<DayNote>('days', action.date) : null;
+      const after: DayNote = { id: action.date, text: action.text, updatedAt: now };
+      this.write('days', action.date, after); this.audit(batchId, action.type, action.date, before, after, origin, sourceMessage); return;
+    }
+    if (action.type === 'update_activity') {
+      const before = this.get<ActivityRecord>('activities', action.activityId);
+      const after = { ...before, ...action.activity };
+      const task = this.get<Task>('tasks', before.taskId);
+      this.write('activities', after.id, after); this.refreshActivity(task); this.write('tasks', task.id, task);
+      this.audit(batchId, action.type, after.id, before, after, origin, sourceMessage); return;
+    }
     if (action.type === 'create_task') {
       const task: Task = { ...action.task, id: randomUUID(), status: action.task.plannedDate ? 'planned' : 'inbox', priority: action.task.priority ?? 'normal', createdAt: now, updatedAt: now };
       this.write('tasks', task.id, task); this.audit(batchId, action.type, task.id, null, task, origin, sourceMessage); return;
@@ -157,8 +175,22 @@ export class PlannerStore {
         if (task.status === 'inbox' || task.status === 'planned') task.status = task.plannedDate ? 'planned' : 'inbox';
         break;
       case 'complete_task':
-        if (task.status === 'completed' || task.status === 'cancelled') throw new Error('Only active tasks can be completed');
-        task.status = 'completed'; task.completedAt = now; if (action.activity) this.addActivity(task, action.activity, now); break;
+        if (task.status === 'completed') return;
+        if (task.status === 'cancelled') throw new Error('Only active tasks can be completed');
+        { const anchor = new Date(now);
+          if (action.completedDate) {
+            const [year,month,date] = action.completedDate.split('-').map(Number);
+            anchor.setFullYear(year,month - 1,date);
+            if (anchor.getTime() > Date.parse(now)) throw new Error('Completion cannot be recorded in the future.');
+          }
+          task.status = 'completed'; task.completedAt = action.activity?.endAt ?? anchor.toISOString();
+          this.addActivity(task, completionActivity(task, this.all('activities'), this.all('events'), anchor, action.activity), now, true);
+        } break;
+      case 'reopen_task':
+        if (task.status !== 'completed') throw new Error('Only completed tasks can be reopened');
+        task.status = task.plannedDate ? 'planned' : 'inbox'; delete task.completedAt;
+        for (const record of this.all<ActivityRecord>('activities').filter(record => record.taskId === task.id && record.completionGenerated)) this.remove('activities', record.id);
+        this.refreshActivity(task); break;
       case 'cancel_task':
         if (task.status === 'completed' || task.status === 'cancelled') throw new Error('Only active tasks can be cancelled');
         task.status = 'cancelled'; task.cancelledAt = now; break;
@@ -194,6 +226,17 @@ export class PlannerStore {
     const message = messageSchema.parse(input);
     this.transaction(() => { if (this.raw('messages', message.id)) throw new Error('Duplicate chat message'); this.write('messages', message.id, message); });
   }
+  hasImportedMail(id: string): boolean { return !!this.raw('emails', id); }
+  applyMailActions(input: ProposedAction[], expectedRevision: number, ids: string[], sourceMessage: string): Data {
+    const actions = input.length ? validateActions(input) : [];
+    this.requireRevision(expectedRevision);
+    if (!ids.length || new Set(ids).size !== ids.length || ids.some(id => !/^[a-zA-Z0-9_-]{1,256}$/.test(id) || this.hasImportedMail(id))) throw new Error('These emails have already been processed. Refresh the list.');
+    this.transaction(() => this.batch('ai', batchId => {
+      for (const action of actions) this.applyAction(action, batchId, 'ai', sourceMessage);
+      for (const id of ids) { this.write('emails', id, { id, processedAt: new Date().toISOString() }); this.audit(batchId, 'process_email', id, null, null, 'ai', sourceMessage); }
+    }));
+    return this.snapshotData();
+  }
   saveProposal(input: Proposal): void {
     const proposal = proposalSchema.parse(input);
     if (!Array.isArray(proposal.actions)) throw new Error('Invalid proposal actions');
@@ -220,7 +263,10 @@ export class PlannerStore {
         const event: FixedEvent = { ...incoming, calendarId: selected, id: existing?.id ?? incoming.id, createdAt: existing?.createdAt ?? incoming.createdAt, ...(existing?.linkedTaskId ? { linkedTaskId: existing.linkedTaskId } : {}) };
         const collision = this.raw('events', event.id);
         if (collision && !existing) throw new Error('Imported event identifier collides with another calendar or local event');
-        retained.add(event.id); this.write('events', event.id, event);
+        retained.add(event.id);
+        const meaningful = (value: FixedEvent) => JSON.stringify(Object.entries(value).filter(([key]) => key !== 'createdAt' && key !== 'updatedAt').sort(([a],[b]) => a.localeCompare(b)));
+        if (existing && meaningful(existing) === meaningful(event)) continue;
+        this.write('events', event.id, event);
         if (!existing || JSON.stringify(existing) !== JSON.stringify(event)) this.audit(batchId, 'import_fixed_event', event.id, existing ?? null, event, 'calendar');
       }
       for (const event of previous) if (!retained.has(event.id)) { this.remove('events', event.id); this.audit(batchId, 'remove_imported_event', event.id, event, null, 'calendar'); }
@@ -244,5 +290,7 @@ export class PlannerStore {
 export async function createStore(filePath: string, wasmPath?: string): Promise<PlannerStore> {
   const SQL = await initSqlJs(wasmPath ? { locateFile: () => wasmPath } : undefined);
   const db = existsSync(filePath) ? new SQL.Database(readFileSync(filePath)) : new SQL.Database();
+  const version = Number(db.exec('PRAGMA user_version')[0].values[0][0]);
+  if (version === 1 && !existsSync(`${filePath}.pre-v2.bak`)) writeFileSync(`${filePath}.pre-v2.bak`, readFileSync(filePath), { flag: 'wx' });
   try { return new PlannerStore(db, SQL, filePath); } catch (error) { db.close(); throw error; }
 }

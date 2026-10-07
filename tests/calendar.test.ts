@@ -30,6 +30,20 @@ function mockedProvider(report?: () => Response) {
 }
 
 describe('fixed-event calendar boundary', () => {
+  it('reads valid data despite unavailable optional properties and a missing ETag', async () => {
+    const href = new URL(objectUrl).pathname;
+    const { provider } = mockedProvider(() => multi(`<d:response><d:href>${href}</d:href><d:propstat><d:prop><c:calendar-data><![CDATA[${simple}]]></c:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat><d:propstat><d:prop><d:displayname/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>`));
+    const [event] = await provider.listEvents(calendarId);
+    expect(event.title).toBe('Appointment'); expect(event.etag).toBe('');
+    await expect(provider.updateEvent(calendarId,event)).rejects.toThrow('Refresh');
+  });
+  it('recovers missing REPORT data with an authenticated object GET', async () => {
+    const { provider,transport } = mockedProvider(() => multi(xml(new URL(objectUrl).pathname,'<d:getetag>"1"</d:getetag>')));
+    const original=transport.getMockImplementation()!;
+    transport.mockImplementation(async(input,init)=>init?.method==='GET'?new Response(simple,{status:200,headers:{etag:'"recovered"'}}):original(input,init));
+    const [event]=await provider.listEvents(calendarId);expect(event.etag).toBe('"recovered"');
+    expect(transport.mock.calls.some(([url,init])=>String(url)===objectUrl&&init?.method==='GET')).toBe(true);
+  });
   it('rejects Tasks and task/event hybrids before any network call', async () => {
     const { provider, transport } = mockedProvider();
     const task = { id: 'task', title: 'Read', status: 'planned', plannedDate: '2026-10-07', estimatedDurationMinutes: 60 };
@@ -52,6 +66,8 @@ describe('fixed-event calendar boundary', () => {
     const [allDay] = parseEvents(ics('DTSTART;VALUE=DATE:20261101\r\nDTEND;VALUE=DATE:20261102'), objectUrl, '"1"', calendarId, 'America/Los_Angeles', now);
     expect(allDay.startAt).toBe('2026-11-01T07:00:00.000Z');
     expect(allDay.endAt).toBe('2026-11-02T08:00:00.000Z');
+    expect(allDay.allDay).toBe(true);
+    expect(serializeEvent(allDay)).toContain('DTSTART;VALUE=DATE:20261101');
     const [floating] = parseEvents(ics('DTSTART:20261007T090000\r\nDTEND:20261007T100000'), objectUrl, '"1"', calendarId, 'America/Los_Angeles', now);
     expect(floating.startAt).toBe('2026-10-07T16:00:00.000Z');
   });

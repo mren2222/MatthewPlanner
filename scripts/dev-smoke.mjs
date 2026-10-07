@@ -20,7 +20,7 @@ try {
   await expect(page.getByTestId('new-task')).toBeVisible();
   await page.getByTestId('new-task').click();
   await page.getByTestId('task-title').fill('Development shell verification');
-  await page.getByRole('button', { name: 'Create task', exact: true }).click();
+  await page.getByRole('button', { name: '保存任务', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   assert.equal((await page.evaluate(() => window.planner.snapshot())).tasks.length, 1);
   assert.deepEqual(errors, [], 'Development shell should have no renderer or CSP errors');

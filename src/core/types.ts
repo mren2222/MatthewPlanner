@@ -13,19 +13,23 @@ export type TaskPatch = Partial<TaskInput>;
 export interface FixedEvent {
   id: string; title: string; startAt: string; endAt: string; timezone: string;
   location?: string; notes?: string; source: 'local' | 'icloud'; externalId?: string;
-  calendarProvider?: string; calendarId?: string; etag?: string; linkedTaskId?: string;
+  calendarProvider?: string; calendarId?: string; etag?: string; linkedTaskId?: string; allDay?: boolean;
   createdAt: string; updatedAt: string;
 }
 export type FixedEventInput = Pick<FixedEvent, 'title' | 'startAt' | 'endAt' | 'timezone'> & Partial<Pick<FixedEvent, 'location' | 'notes' | 'linkedTaskId'>>;
 export interface ActivityRecord {
   id: string; taskId: string; startAt?: string; endAt?: string; durationMinutes: number;
-  confidence: ActivityTimeConfidence; source: 'manual' | 'ai_inferred' | 'timer' | 'import'; createdAt: string;
+  confidence: ActivityTimeConfidence; source: 'manual' | 'ai_inferred' | 'timer' | 'import'; createdAt: string; completionGenerated?: boolean;
 }
-export type ActivityInput = Omit<ActivityRecord, 'id' | 'taskId' | 'createdAt'>;
+export type ActivityInput = Omit<ActivityRecord, 'id' | 'taskId' | 'createdAt' | 'completionGenerated'>;
+export interface DayNote { id: string; text: string; updatedAt: string }
 export type ProposedAction =
   | { type: 'create_task'; task: TaskInput }
   | { type: 'update_task'; taskId: string; patch: TaskPatch }
-  | { type: 'complete_task'; taskId: string; activity?: ActivityInput }
+  | { type: 'complete_task'; taskId: string; activity?: ActivityInput; completedDate?: string }
+  | { type: 'reopen_task'; taskId: string }
+  | { type: 'set_day_note'; date: string; text: string }
+  | { type: 'update_activity'; activityId: string; activity: ActivityInput }
   | { type: 'cancel_task'; taskId: string }
   | { type: 'move_task'; taskId: string; plannedDate: string }
   | { type: 'change_estimate'; taskId: string; estimatedDurationMinutes: number }
@@ -36,7 +40,7 @@ export type ProposedAction =
   | { type: 'delete_fixed_event'; eventId: string };
 export interface AuditEntry {
   id: string; batchId: string; actionType: string; entityId: string;
-  before: Task | FixedEvent | null; after: Task | FixedEvent | null;
+  before: Task | FixedEvent | DayNote | ActivityRecord | null; after: Task | FixedEvent | DayNote | ActivityRecord | null;
   timestamp: string; origin: 'manual' | 'ai' | 'calendar' | 'undo'; sourceMessage?: string; undone: boolean;
 }
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; content: string; createdAt: string; proposalId?: string }
@@ -46,13 +50,15 @@ export interface PlannerContext {
 }
 export interface PlannerReply { message: string; actions: ProposedAction[]; clarification?: string }
 export interface Proposal extends PlannerReply { id: string; baseRevision: number; sourceMessage: string; status: 'pending' | 'applied' | 'cancelled'; createdAt: string }
-export interface SettingsSummary { aiConfigured: boolean; aiModel: string; calendarConfigured: boolean; calendarId?: string; appleAccount?: string; secureStorageAvailable: boolean }
+export interface SyncStatus { state: 'idle' | 'syncing' | 'success' | 'error'; lastSuccess?: string; message?: string }
+export interface MailCandidate { id: string; threadId: string; subject: string; from: string; receivedAt: string; text: string; url: string }
+export interface SettingsSummary { aiConfigured: boolean; aiModel: string; calendarConfigured: boolean; calendarId?: string; appleAccount?: string; secureStorageAvailable: boolean; calendarName?: string; calendarSync: SyncStatus; gmailConfigured: boolean; gmailClientId?: string; gmailQuery: string; mailStatus?: string }
 export interface PlannerSnapshot {
   revision: number; tasks: Task[]; fixedEvents: FixedEvent[]; activities: ActivityRecord[];
-  history: AuditEntry[]; messages: ChatMessage[]; proposals: Proposal[]; settings: SettingsSummary;
+  history: AuditEntry[]; messages: ChatMessage[]; proposals: Proposal[]; dayNotes: DayNote[]; settings: SettingsSummary;
 }
 export interface CalendarInfo { id: string; name: string; readOnly?: boolean }
-export interface SettingsInput { openaiKey?: string; aiModel?: string; appleAccount?: string; applePassword?: string; calendarId?: string; clearAI?: boolean; clearCalendar?: boolean }
+export interface SettingsInput { openaiKey?: string; aiModel?: string; appleAccount?: string; applePassword?: string; calendarId?: string; clearAI?: boolean; clearCalendar?: boolean; gmailClientId?: string; gmailClientSecret?: string; gmailQuery?: string; clearGmail?: boolean }
 export interface PlannerAPI {
   snapshot(): Promise<PlannerSnapshot>;
   apply(actions: ProposedAction[], expectedRevision: number): Promise<PlannerSnapshot>;
@@ -65,4 +71,8 @@ export interface PlannerAPI {
   listCalendars(): Promise<CalendarInfo[]>;
   syncCalendar(): Promise<PlannerSnapshot>;
   publishEvent(eventId: string): Promise<PlannerSnapshot>;
+  connectGmail(): Promise<PlannerSnapshot>;
+  listMail(): Promise<MailCandidate[]>;
+  importMail(ids: string[]): Promise<PlannerSnapshot>;
+  openLink(url: string): Promise<void>;
 }

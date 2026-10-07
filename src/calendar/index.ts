@@ -23,7 +23,7 @@ export interface ICloudOptions {
   fetch?: typeof globalThis.fetch;
 }
 
-const allowedFields = new Set(['id', 'title', 'startAt', 'endAt', 'timezone', 'location', 'notes', 'source', 'externalId', 'calendarProvider', 'calendarId', 'etag', 'linkedTaskId', 'createdAt', 'updatedAt']);
+const allowedFields = new Set(['id', 'title', 'startAt', 'endAt', 'timezone', 'location', 'notes', 'source', 'externalId', 'calendarProvider', 'calendarId', 'etag', 'linkedTaskId', 'createdAt', 'updatedAt', 'allDay']);
 const day = 86_400_000;
 const MAX_INSTANCES = 50_000;
 const MAX_ITERATIONS = 100_000;
@@ -49,6 +49,7 @@ export function assertFixedEvent(value: unknown): asserts value is FixedEvent {
   }
   if (Date.parse(event.endAt as string) <= Date.parse(event.startAt as string)) throw new CalendarError('Fixed event end must follow its start.');
   if (!validTimezone(event.timezone as string) || !['local', 'icloud'].includes(event.source as string)) throw new CalendarError('Invalid fixed event timezone or source.');
+  if (event.allDay !== undefined && typeof event.allDay !== 'boolean') throw new CalendarError('Invalid all-day event metadata.');
   for (const field of ['location', 'notes', 'externalId', 'calendarProvider', 'calendarId', 'etag', 'linkedTaskId']) {
     if (event[field] !== undefined && typeof event[field] !== 'string') throw new CalendarError('Invalid fixed event metadata.');
   }
@@ -118,12 +119,14 @@ function propText(value: unknown): string | undefined {
 function objectFromResponse(response: DAVResponse, calendarId: string): { url: string; etag: string; data: string } {
   const data = propText(response.props?.calendarData);
   const etag = propText(response.props?.getetag);
-  if (!response.ok || response.parseError || !response.href || !data || !etag || response.propStats?.some(stat => !stat.ok)) {
+  // Optional properties can have a 404 propstat alongside valid calendar-data.
+  // An ETag is required for conditional writes, but not for a read-only import.
+  if (!response.ok || response.parseError || !response.href || !data || response.propStats?.some(stat => !stat.ok && Object.hasOwn(stat.props ?? {}, 'calendarData'))) {
     throw new CalendarError('Calendar refresh is incomplete. Previous imported events were kept.');
   }
   const url = appleUrl(response.href, calendarId);
   if (!url.href.startsWith(calendarId) || url.hash) throw new CalendarError('iCloud returned an event outside the selected calendar.');
-  return { url: url.href, etag, data };
+  return { url: url.href, etag: etag ?? '', data };
 }
 
 // Resolve floating / IANA local wall times without depending on the host's timezone.
@@ -207,7 +210,7 @@ export function parseEvents(data: string, url: string, etag: string, calendarId:
       id: `icloud-${createHash('sha256').update(`${calendarId}|${externalId}`).digest('hex').slice(0, 32)}`,
       title: event.summary || '(Untitled event)', startAt: startTime.at, endAt: endTime.at,
       timezone: typeof displayZone === 'string' && validTimezone(displayZone) ? displayZone : startTime.timezone, source: 'icloud', calendarProvider: 'icloud', calendarId, externalId, etag,
-      location: event.location || undefined, notes: event.description || undefined,
+      location: event.location || undefined, notes: event.description || undefined, allDay: start.isDate,
       createdAt: timestamp, updatedAt: timestamp,
     };
     assertFixedEvent(eventValue);
@@ -268,7 +271,10 @@ export function serializeEvent(event: FixedEvent, existing?: string): string {
   component.removeAllProperties('duration');
   for (const [name, value] of [['dtstart', event.startAt], ['dtend', event.endAt], ['dtstamp', new Date().toISOString()], ['last-modified', new Date().toISOString()]]) {
     component.removeAllProperties(name);
-    component.addPropertyWithValue(name, ICAL.Time.fromJSDate(new Date(value), true));
+    if (event.allDay && (name === 'dtstart' || name === 'dtend')) {
+      const parts = Object.fromEntries(new Intl.DateTimeFormat('en', { timeZone: event.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value)).map(part => [part.type,part.value]));
+      component.addPropertyWithValue(name, ICAL.Time.fromDateString(`${parts.year}-${parts.month}-${parts.day}`));
+    } else component.addPropertyWithValue(name, ICAL.Time.fromJSDate(new Date(value), true));
   }
   return `${calendar.toString()}\r\n`;
 }
@@ -330,12 +336,26 @@ export class ICloudCalendarProvider implements CalendarProvider {
       if (responses.length > 20_000) throw new CalendarError('This calendar contains too many objects to refresh safely.');
       const now = new Date();
       const seen = new Set<string>();
-      const events = responses.flatMap(response => {
-        const object = objectFromResponse(response, calendarId);
+      const objects: { url: string; etag: string; data: string }[] = [];
+      for (const response of responses) {
+        let object: { url: string; etag: string; data: string };
+        try { object = objectFromResponse(response, calendarId); }
+        catch (error) {
+          if (!response.href || response.parseError || !response.ok) throw error;
+          const url = appleUrl(response.href, calendarId);
+          if (!url.href.startsWith(calendarId) || url.href === calendarId || url.hash) throw error;
+          // Some iCloud REPORT responses omit calendar-data. Recover the exact
+          // object using authenticated GET; never treat the missing object as deleted.
+          const fetched = await secureICloudFetch(this.options.fetch ?? globalThis.fetch)(url.href, { method: 'GET', headers: { Authorization: `Basic ${Buffer.from(`${this.options.username}:${this.options.password}`).toString('base64')}` } });
+          if (!fetched.ok) throw error;
+          object = { url: url.href, etag: fetched.headers.get('etag') ?? '', data: await fetched.text() };
+          if (!object.data || object.data.length > 5_000_000) throw error;
+        }
         if (seen.has(object.url)) throw new CalendarError('iCloud returned duplicate calendar objects.');
         seen.add(object.url);
-        return parseEvents(object.data, object.url, object.etag, calendarId, this.options.timezone!, now);
-      });
+        objects.push(object);
+      }
+      const events = objects.flatMap(object => parseEvents(object.data, object.url, object.etag, calendarId, this.options.timezone!, now));
       if (events.length > MAX_INSTANCES) throw new CalendarError('This calendar has too many events to refresh safely.');
       return events;
     } catch (error) { if (error instanceof CalendarError) throw error; throw new CalendarError('Calendar refresh failed. Previous imported events were kept.'); }

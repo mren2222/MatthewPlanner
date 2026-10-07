@@ -52,6 +52,7 @@ function date(text: string, today: string): string | undefined {
 export function interpretOffline(message: string, context: PlannerContext): PlannerReply {
   const actions: ProposedAction[] = [];
   const questions: string[] = [];
+  const alreadyCompleted: string[] = [];
   const cn = isChinese(message);
   const clauses = message.split(/[。；;\n!?]+|(?<!\d)\.|\.(?!\d)|[,，](?=\s*(?:portfolio|amazon|dri|surface|blue origin|move|prepare|(?:明天|今天)(?:amazon|portfolio|dri|surface|blue origin)))/i)
     .map(value => value.trim()).filter(Boolean);
@@ -81,6 +82,7 @@ export function interpretOffline(message: string, context: PlannerContext): Plan
       continue;
     }
     for (const task of matches) {
+      if (task.status === 'completed' && complete) { alreadyCompleted.push(task.title); continue; }
       if (!active(task)) { questions.push(cn ? `「${redactText(task.title, 200)}」已结束，请确认要如何修改。`
         : `“${redactText(task.title, 200)}” is already ${task.status}. Please clarify the change.`); continue; }
       if (cancel) { actions.push({ type: 'cancel_task', taskId: task.id }); continue; }
@@ -95,6 +97,7 @@ export function interpretOffline(message: string, context: PlannerContext): Plan
           continue;
         }
         actions.push({ type: 'complete_task', taskId: task.id,
+          ...(/昨天|yesterday/i.test(clause) ? { completedDate: addDays(context.today, -1) } : {}),
           ...(actual && minutes ? { activity: { durationMinutes: minutes, confidence: 'approximate' as const, source: 'manual' as const } } : {}) });
       } else if (actual && minutes) actions.push({ type: 'record_activity', taskId: task.id,
         activity: { durationMinutes: minutes, confidence: 'approximate', source: 'manual' } });
@@ -110,8 +113,8 @@ export function interpretOffline(message: string, context: PlannerContext): Plan
   // Duplicate clauses must not apply the same mutation twice.
   const unique = actions.filter((action, index) => actions.findIndex(candidate => JSON.stringify(candidate) === JSON.stringify(action)) === index);
   const clarification = [...new Set(questions)].join(' ');
-  return { message: label + (unique.length ? (cn ? `已准备 ${unique.length} 项修改，请预览后应用。` : `${unique.length} change(s) ready to preview and apply.`)
-    : (clarification ? (cn ? '请补充任务信息。' : 'No changes proposed; please clarify.') : (cn ? '请输入任务修改。' : 'Enter a task change.'))), actions: unique,
+  return { message: label + (unique.length ? (cn ? `已更新 ${unique.length} 项。` : `Updated ${unique.length} item(s).`)
+    : (clarification ? (cn ? '请补充任务信息。' : 'No changes proposed; please clarify.') : alreadyCompleted.length ? (cn ? `${alreadyCompleted.join('、')} 已完成。` : `${alreadyCompleted.join(', ')} already completed.`) : (cn ? '请输入任务修改。' : 'Enter a task change.'))), actions: unique,
     ...(clarification ? { clarification } : {}) };
 }
 

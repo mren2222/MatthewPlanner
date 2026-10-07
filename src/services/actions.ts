@@ -9,4 +9,5 @@ export class ActionService {
   }
   undo() { return this.store.undo(); }
   applyProposal(id: string) { return this.store.applyProposal(id); }
+  applyMail(actions: ProposedAction[], revision: number, ids: string[], sourceMessage: string) { return this.store.applyMailActions(actions, revision, ids, sourceMessage); }
 }

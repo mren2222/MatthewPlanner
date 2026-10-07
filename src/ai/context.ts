@@ -29,7 +29,7 @@ export function buildPlannerContext(context: PlannerContext, message = '') {
     fixedEvents: context.fixedEvents.filter(event => event.startAt.slice(0, 10) >= context.today)
       .slice(0, 30).map(event => ({ id: event.id, title: redactText(event.title, 200),
         startAt: event.startAt, endAt: event.endAt, timezone: event.timezone,
-        linkedTaskId: event.linkedTaskId })),
+        linkedTaskId: event.linkedTaskId, source: event.source, notes: event.notes ? redactText(event.notes, 800) : undefined })),
     activities: context.activities.slice(-30).map(activity => ({ taskId: activity.taskId,
       startAt: activity.startAt, endAt: activity.endAt, durationMinutes: activity.durationMinutes,
       confidence: activity.confidence })),
