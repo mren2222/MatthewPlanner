@@ -1,5 +1,23 @@
 # Independent review
 
+## Lead integration review of 0.2.3
+
+Moved the existing selected-day fixed-event renderer and Add control to the
+right column above next-day commitments. Existing start-time prominence,
+meeting links, event details and explicit publishing controls are retained.
+Changing the selected day still uses that day's appointments and the following
+day. No entity mutation or calendar/Work/provider logic is changed. The user's
+palette request is discussion-only; CSS changes are heading selector reuse and
+spacing, without any color value changes.
+
+Typecheck, lint, build, all 119 unit regressions and the isolated development
+and packaged desktop workflows pass.
+Updated desktop assertions verify the two commitment sections share the right
+column in the requested vertical order and no fixed-event rows remain in the
+left column. Packaged checks also verify selected-date navigation, meeting
+links and the Add control in the relocated section. Lead visually reviewed the new layout. Release verification is
+tracked in TASKS.md.
+
 ## Lead integration review of 0.2.2
 
 Presentation-only changes follow the user's explicit request: a single Todo

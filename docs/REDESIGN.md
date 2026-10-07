@@ -1,5 +1,19 @@
 # Approved 0.2.0 redesign
 
+## Approved 0.2.3 arrangement placement
+
+The user requested today's fixed commitments above next-day commitments in the
+right column on 2026-10-07. The selected day's Todo and Notes remain in the left
+column. Right-column order is selected-day fixed commitments, next-day fixed
+commitments, then Other Todo. Current-day start times and full event controls
+are retained, including Add and meeting links. A different selected date shows
+its own commitments above the following day's commitments. Narrow layouts keep
+the same ordering within the stacked sidebar.
+
+Palette changes were explicitly discussion-only. The user prefers a future
+warm-white/olive direction. No colors are changed in this release; spacing and
+heading selectors are the only CSS adjustments. Lead owns this refinement.
+
 ## Approved 0.2.2 presentation refinement
 
 The user requested this follow-up on 2026-10-07. Completed items stay in the

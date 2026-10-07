@@ -22,6 +22,8 @@
 | I3 | Lead | Complete; 0.2.1 Windows verification passes | A4 W1 | scripts, docs, release | 119 regressions, type/lint, production build, dev/packaged real CLI-to-desktop delivery/retry/undo/redaction/restart; portable output |
 | U3 | Lead | Complete | U2 W1 | Workspace, workspace.css, desktop script | Checked completion at Todo bottom without strike-through/header; Notes double height/content resize; right-side backlog card below next-day events |
 | I4 | Lead | Complete; 0.2.2 Windows verification passes | U3 | scripts, docs, release | 119 tests, type/lint/build, dev/packaged desktop layout/Notes persistence checks, visual review at full and narrow widths, Windows portable |
+| U4 | Lead | Complete | U3 | Workspace, workspace.css, desktop script | Current-day commitments above next-day commitments in right column; Todo/Notes left; existing event controls and start times retained; palette unchanged |
+| I5 | Lead | Complete; 0.2.3 Windows verification passes | U4 | scripts, docs, release | 119 tests, type/lint/build, development and packaged desktop geometry/controls/date checks, visual review, Windows portable |
 
 Git author identity uses Matthew Ren and the approved GitHub noreply address for public commits. First three agents started with exclusive directory ownership before a base commit could be made; calendar used an isolated agent/calendar worktree, subsequently removed after integration. The public repository is https://github.com/mren2222/MatthewPlanner. Original pre-publication history is retained on a local backup branch. Live providers require user-supplied credentials, which are not blockers for offline MVP.
 

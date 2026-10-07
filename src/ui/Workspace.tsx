@@ -71,7 +71,7 @@ export default function Workspace() {
   const sync = snapshot.settings.calendarSync;
   const returnToday = () => { selectDay(today); };
   return <div className={`app-shell ${chatOpen ? 'with-chat' : ''}`}>
-    <aside className="sidebar"><div className="brand"><span className="brand-mark">m</span><span>Matthew<small>PLANNER</small></span></div><nav><button className={view === 'plan' ? 'selected' : ''} onClick={() => setView('plan')}><Icon name="sun"/>安排</button><button className={view === 'history' ? 'selected' : ''} onClick={() => setView('history')}><Icon name="history"/>回看</button></nav><div className="sidebar-bottom"><p><span className="status-dot"/>保存在这台电脑</p><button onClick={() => setModal({ type: 'settings' })}><Icon name="settings"/>设置</button><small>Matthew Planner · 0.2.2</small></div></aside>
+    <aside className="sidebar"><div className="brand"><span className="brand-mark">m</span><span>Matthew<small>PLANNER</small></span></div><nav><button className={view === 'plan' ? 'selected' : ''} onClick={() => setView('plan')}><Icon name="sun"/>安排</button><button className={view === 'history' ? 'selected' : ''} onClick={() => setView('history')}><Icon name="history"/>回看</button></nav><div className="sidebar-bottom"><p><span className="status-dot"/>保存在这台电脑</p><button onClick={() => setModal({ type: 'settings' })}><Icon name="settings"/>设置</button><small>Matthew Planner · 0.2.3</small></div></aside>
     <div className="planner-column"><header className="topbar"><span>{view === 'plan' ? '你的每日计划' : '做过的事情'}</span><div><button aria-label="撤销" className="text-button" disabled={!!busy || !snapshot.history.some(entry => !entry.undone && entry.origin !== 'undo' && entry.origin !== 'calendar')} onClick={() => void run('正在撤销', () => window.planner.undo())}><Icon name="undo"/>撤销</button><button className="secondary-button" disabled={!!busy} onClick={() => setModal({ type: 'mail' })}>检查求职邮件</button><button className="primary-button" data-testid="new-task" disabled={!!busy} onClick={() => setModal({ type: 'task' })}><Icon name="plus"/>添加任务</button><button className={`chat-toggle ${chatOpen ? 'selected' : ''}`} aria-label="打开对话" aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}><Icon name="chat"/></button></div></header>
       {error && <div className="error-banner" role="alert">{error}<button aria-label="关闭错误提示" onClick={() => setError('')}>×</button></div>}
       {busy && <div className="busy-line" role="status">{busy}…</div>}
@@ -83,7 +83,6 @@ export default function Workspace() {
       {view === 'plan' && <div className="day-layout">
         <section className="selected-day">
           <div className="page-heading"><h2>{dayTitle(day)}</h2><input aria-label="查看日期" type="date" value={day} onChange={event => { if (event.target.value) selectDay(event.target.value); }}/></div>
-          <section className="plan-section"><div className="section-heading"><h3>固定安排</h3><button className="text-button" disabled={!!busy} onClick={() => setModal({ type: 'event' })}>＋ 添加</button></div>{eventsFor(day).length ? eventsFor(day).map(event => eventRow(event)) : <p className="empty-line">这天没有固定安排。</p>}</section>
           <section className="plan-section" data-testid="day-todo"><div className="section-heading"><h3>Todo</h3></div>
             {active.map(taskRow)}{completed.map(taskRow)}
             {!active.length && !completed.length && <p className="empty-line">没有待办，留一点空间给自己。</p>}
@@ -92,6 +91,7 @@ export default function Workspace() {
           <DailyNotes key={day} value={snapshot.dayNotes.find(note => note.id === day)?.text ?? ''} busy={!!busy} save={text => apply([{ type: 'set_day_note', date: day, text }])}/>
         </section>
         <aside className="day-sidebar">
+          <section className="current-day" aria-label="当天固定安排"><div className="section-heading"><h2>{day === today ? '今天' : '当天'} · {dayTitle(day)}</h2><button className="text-button" disabled={!!busy} onClick={() => setModal({ type: 'event' })}>＋ 添加</button></div><p className="subtle">固定安排</p>{eventsFor(day).length ? eventsFor(day).map(event => eventRow(event)) : <p className="empty-line">这天没有固定安排。</p>}</section>
           <section className="next-day"><h2>{day === today ? '明天' : '次日'} · {dayTitle(addDays(day, 1))}</h2><p className="subtle">固定安排</p>{eventsFor(addDays(day, 1)).length ? eventsFor(addDays(day, 1)).map(event => eventRow(event, true)) : <p className="empty-line">没有固定安排。</p>}</section>
           <section className="backlog-panel" aria-label="其他 Todo"><h3>其他 Todo</h3>
             {earlier.length > 0 && <details className="earlier-work" open><summary>之前未完成 · {earlier.length}</summary>{earlier.map(task => <div key={task.id}><small>{task.plannedDate}</small>{taskRow(task)}</div>)}</details>}

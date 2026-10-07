@@ -6,7 +6,7 @@ A local-first Windows desktop planner. Flexible tasks have a **planned day and o
 
 ## Launch
 
-- Portable application: `release/Matthew Planner 0.2.2.exe`.
+- Portable application: `release/Matthew Planner 0.2.3.exe`.
 - Application folder: double-click `release/win-unpacked/Matthew Planner.exe`. Keep the whole win-unpacked folder together.
 - These are local, unsigned Windows x64 builds. No account or API key is required for local planning.
 
