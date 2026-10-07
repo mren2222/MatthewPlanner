@@ -1,77 +1,50 @@
 # Matthew Planner
 
-0.2.1 adds a local Codex/connected ChatGPT Work input bridge, preserves longer clarification conversations, and records completed work that has no existing task. See [Work input setup](docs/WORK_INPUT.md). The computer must be connected and the app open; cloud-only chats cannot access local data. iCloud troubleshooting is deferred at the user's request.
+通过 **ChatGPT Work 对话输入计划**，在 Windows 桌面查看每日 Todo、固定安排和完成记录。
 
-A local-first Windows desktop planner. Flexible tasks have a **planned day and optional estimated duration**. Appointments have exact times and live separately as fixed events. Clear chat commands apply directly with undo; discussion and ambiguity leave the plan unchanged.
+你可以直接说：「明天上午 10 点有面试，今天准备项目介绍，预计 1 小时。」
+明天的日历里会有面试，今天的 Todo 里会有准备任务。Todo 只指定日期和预计时长，
+不需要决定几点开始或先做哪件事。
 
-## Launch
+![Matthew Planner 的每日计划界面](docs/images/planner.png)
 
-- Portable application: `release/Matthew Planner 0.2.3.exe`.
-- Application folder: double-click `release/win-unpacked/Matthew Planner.exe`. Keep the whole win-unpacked folder together.
-- These are local, unsigned Windows x64 builds. No account or API key is required for local planning.
+## 主要功能
 
-The fixed-only week overview sits above selected-day commitments and Todo, with next-day appointments beside them. Date headings contain only date/weekday. Duration is optional; priority and statistics are absent. One click completes a task and records local retrospective activity, another reopens it. Completed items move below active work. Daily Notes, past/future dates and earlier unfinished work are available. **撤销 / Undo** reverses the latest local batch.
+- **每日 Todo**：添加、调整日期、打勾完成。完成项保持正常文字，移到清单底部。
+- **今天与明天的固定安排**：今天突出显示开始时间；明天的面试与电话放在同一侧，方便提前准备。
+- **本周日历**：总览只显示固定安排，也可以展开每周时间格。
+- **每日 Notes**：记录进展和想法，输入框随内容增长。
+- **其他 Todo**：之前未完成和未定日期的任务集中放在右下方。
+- **完成回看**：完成的事情记录成可调整的本地时间块，方便回顾当天做了什么，不上传 iCloud。
+- **撤销**：明确指令直接执行并保留撤销；「先讨论」或信息不明确时不改变计划。
+- **可选连接**：读取 iCloud 日历的固定安排；Gmail 只读授权后，选择邮件提取相关任务和面试。只有主动发布固定安排才会写入 iCloud。
 
-Chat opens when needed. Without a key it is a limited offline interpreter. Examples: “Move Portfolio to Friday”, “DRI is done”, “portfolio今天不做了，明天吧”. Clear commands apply after validation without a second confirmation. Discussion and clarification do not apply actions. Old pending proposals remain accessible, with stale revision protection.
+界面使用暖白底色、深灰文字和少量橄榄绿。计划保存在本机，不依赖托管后端。
 
-**回看 / Retrospect** shows local completed-activity time blocks, which can be edited or dragged. Automatically placed times retain their internal source without UI confidence labels. These records never upload to iCloud. No automatic task rescheduling or evening check-in is performed. See the [approved redesign](docs/REDESIGN.md) and [Gmail setup](docs/GMAIL_SETUP.md).
+## 下载与安装
 
-## Optional connections
+从 [GitHub Releases](https://github.com/mren2222/MatthewPlanner/releases/latest) 下载 Windows x64 的 **Setup 安装包**。
+安装后可从桌面或开始菜单打开，也可把图标固定到任务栏。
+以后运行新版安装包即可更新同一位置，已有计划和设置会保留。
+详细步骤见 [安装与更新](docs/INSTALL.md)。
 
-In **Settings**, enter an OpenAI API key and a model supporting Responses structured output. The model is configurable; its initial value is `gpt-5.6-luna`. Version 0.1.2 also upgrades the previously saved `gpt-4o-mini` default to Luna. Subsequent explicitly saved model choices are respected. Luna requests use low reasoning effort, an 8,000-token output budget and a 60-second timeout. Configured chat sends bounded task/history/chat context to OpenAI with API response storage disabled. Calendar credentials are excluded and known secrets are redacted. See [AI behavior and limits](docs/AI.md).
+## 用 ChatGPT 输入
 
-For iCloud, save your Apple Account and app-specific password in Settings. The app automatically finds “事情” and refreshes at startup, every five minutes while open, and after resume/network recovery. Multiple same-name calendars require a one-time selection. Details are in [iCloud integration](docs/ICLOUD.md). Gmail requires a Desktop OAuth client and browser consent; see [Gmail setup](docs/GMAIL_SETUP.md).
+在拥有这台 Windows 电脑访问权限的 **ChatGPT Work** 对话中描述安排，
+助手读取当前计划，通过本地入口更新软件并检查结果。Codex 也能使用同一个入口。
+使用连接的 Work 输入不需要在软件里填写 OpenAI API key。
 
-Only **Publish** on an explicitly created fixed event can send a new appointment to iCloud. Flexible tasks and activity records have no calendar export path. Imported/published events are read-only in this MVP UI: edit them in Calendar and refresh. The provider separately implements guarded updates and deletes for future UI use. Recurring appointments are expanded for the past 7 and next 90 days; unsupported/malformed calendars fail the refresh while preserving the last successful snapshot. Live provider authentication has not been tested with your account.
+**实际更新时，电脑需要在线，Matthew Planner 需要打开。**
+手机上可以继续这个对话；电脑离线时先记录想法，重新连接后再告诉助手同步。
+普通的、没有连接电脑的 ChatGPT 对话无法直接修改本地软件，软件也不会自动读取聊天记录。
+连接方法与助手指令见 [ChatGPT Work 输入设置](docs/WORK_INPUT.md)。
 
-Credentials are encrypted through Windows DPAPI using Electron safeStorage and stored outside SQLite. Saved keys/passwords are never returned to the renderer. Unavailable encryption refuses credential storage while local planning remains usable.
+## 可选设置与开发
 
-## Data and backup
+- [iCloud 日历](docs/ICLOUD.md)
+- [Gmail 只读授权](docs/GMAIL_SETUP.md)
+- [应用内 AI 对话](docs/AI.md)
+- [开发与验证](docs/DEVELOPMENT.md)
 
-The app stores `planner.sqlite` and encrypted `credentials.secrets` under `%APPDATA%/Matthew Planner`. The SQLite file contains tasks, events, activity, chat, proposals, revisions and audit history. Quit the app before copying it for backup. Credentials are tied to the Windows account; configure them again when moving to another PC. The portable executable still uses this local data directory. There is no hosted backend or automatic task cloud sync.
-
-Tests use separate ignored directories under `test-results`; they do not seed or alter your regular planner data.
-
-## Develop and verify
-
-Requirements: Windows x64, Node 22.12+ and pnpm. This machine's existing bundled Node 24 and pnpm were used; no unrelated system configuration was changed.
-
-```powershell
-cd MatthewPlanner
-pnpm install
-pnpm exec install-electron
-pnpm dev
-```
-
-`pnpm dev` launches Electron with Vite. Close the app and restart development mode after changing main/preload code; React edits refresh automatically.
-
-```powershell
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm start
-pnpm test:e2e
-pnpm test:dev
-pnpm package
-pnpm test:packaged
-pnpm package:portable
-```
-
-If pnpm is not on PATH in this Codex workspace, replace `pnpm` with:
-
-```powershell
-& 'C:\Users\Matthew\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd'
-```
-
-Settings is the preferred key configuration method. Optional process environment values `OPENAI_API_KEY` and `PLANNER_AI_MODEL` are read only in main. `.env.example` documents them; `.env` files are ignored and are not automatically loaded.
-
-## Architecture and validation
-
-Electron main owns SQLite, OS-encrypted credentials, AI and CalDAV networking. The sandboxed React renderer receives only a typed preload API. All manual and AI mutations pass validated ActionService operations with revision checks, transaction rollback, audit before/after states, atomic disk persistence, and local undo. AI providers never import the database.
-
-SQLite runs through sql.js to avoid native ABI/rebuild dependencies. The persistent file is ordinary SQLite, with schema version 2 and one main-process writer. Version 1 is upgraded while retaining a pre-v2 backup. Whole-file atomic persistence is appropriate for this personal application; very large databases should move to a native SQLite implementation.
-
-Validation includes unit/presentation/provider tests, TypeScript, lint, production and development builds, and Windows desktop flows including restart persistence and DPAPI credential storage. Provider tests use mocked responses, including Gmail OAuth/state/PKCE, selected-email isolation, mainland-China iCloud discovery and incomplete-data recovery, Luna reasoning configuration and safe failure categories; no real provider credentials are in fixtures. Review findings and fixes are recorded in [review notes](docs/REVIEW.md).
-
-See [product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), [contracts](docs/CONTRACTS.md), [decisions](docs/DECISIONS.md), [backlog](docs/TASKS.md), and [acceptance examples](docs/TEST_CASES.md).
+数据保存在 %APPDATA%\Matthew Planner；关闭软件后可备份该目录。
+账户凭据使用 Windows 加密存储，迁移到另一台电脑时需要重新连接账户。

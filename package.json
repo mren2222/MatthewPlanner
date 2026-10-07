@@ -1,7 +1,7 @@
 {
   "name": "matthew-planner",
   "productName": "Matthew Planner",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Local-first day and duration planner for Windows",
@@ -17,6 +17,7 @@
     "start": "electron .",
     "package": "node scripts/build.mjs && electron-builder --win dir",
     "package:portable": "node scripts/build.mjs && electron-builder --win portable",
+    "package:installer": "node scripts/build.mjs && electron-builder --win nsis",
     "test:e2e": "node scripts/e2e.mjs",
     "test:packaged": "node scripts/e2e.mjs --packaged",
     "test:dev": "node scripts/dev-smoke.mjs"
@@ -29,6 +30,7 @@
     },
     "files": [
       "dist/**",
+      "build/icon.png",
       "package.json"
     ],
     "asar": true,
@@ -36,9 +38,21 @@
     "electronDist": "node_modules/electron/dist",
     "win": {
       "target": [
-        "dir"
+        "nsis"
       ],
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "artifactName": "Matthew Planner Setup ${version}.${ext}",
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Matthew Planner",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
     }
   },
   "dependencies": {

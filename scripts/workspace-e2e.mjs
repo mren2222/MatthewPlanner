@@ -13,8 +13,11 @@ const env={...process.env,PLANNER_E2E:'1',PLANNER_DATA_DIR:dataDir};
 delete env.ELECTRON_RUN_AS_NODE;delete env.OPENAI_API_KEY;delete env.PLANNER_DEV_URL;
 let app;
 const packaged=process.argv.includes('--packaged');
+const executableArgument=process.argv.indexOf('--executable');
+const installedExecutable=executableArgument>=0?process.argv[executableArgument+1]:undefined;
+if(executableArgument>=0&&!installedExecutable)throw new Error('--executable requires an installed application path');
 async function launch(){
-  app=await electron.launch({executablePath:packaged?resolve('release/win-unpacked/Matthew Planner.exe'):electronPath,args:packaged?[]:[resolve('.')],env,timeout:30000});
+  app=await electron.launch({executablePath:installedExecutable?resolve(installedExecutable):packaged?resolve('release/win-unpacked/Matthew Planner.exe'):electronPath,args:packaged||installedExecutable?[]:[resolve('.')],env,timeout:30000});
   const page=await app.firstWindow();page.setDefaultTimeout(12000);await expect(page.getByTestId('new-task')).toBeVisible();return page;
 }
 const state=page=>page.evaluate(()=>window.planner.snapshot());

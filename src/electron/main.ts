@@ -19,6 +19,7 @@ import { emailActions } from '../mail/actions';
 import { LocalPlannerBridge } from '../services/local-bridge';
 
 app.setName('Matthew Planner');
+app.setAppUserModelId('local.matthew.planner');
 const testMode = process.env.PLANNER_E2E === '1';
 if (testMode && process.env.PLANNER_DATA_DIR) app.setPath('userData', resolve(process.env.PLANNER_DATA_DIR));
 const ownsInstance = app.requestSingleInstanceLock();
@@ -130,7 +131,7 @@ function handle(channel: string, fn: (...args: any[]) => unknown): void {
   });
 }
 async function createWindow(): Promise<void> {
-  window = new BrowserWindow({ width: 1440, height: 920, minWidth: 960, minHeight: 680, backgroundColor: '#f7f8fa', title: 'Matthew Planner', show: true,
+  window = new BrowserWindow({ width: 1440, height: 920, minWidth: 960, minHeight: 680, backgroundColor: '#faf9f6', title: 'Matthew Planner', icon: join(app.getAppPath(), 'build/icon.png'), show: true,
     webPreferences: { preload: join(__dirname, 'preload.cjs'), nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true } });
   Menu.setApplicationMenu(null);
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

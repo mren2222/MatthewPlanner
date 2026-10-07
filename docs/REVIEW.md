@@ -1,5 +1,34 @@
 # Independent review
 
+## Lead integration review of 0.3.0
+
+Applied the approved warm-white/neutral-text/olive palette without changing
+planning, provider or bridge behavior. Removed the extra divider between the
+Todo and commitment columns. Reviewed the normal and narrow desktop layouts.
+Primary white-on-olive controls and neutral body/secondary text have calculated
+contrast above 4.5:1 on their surfaces. Decorative card borders remain subtle.
+
+The per-user NSIS installer uses the existing appId and userData name, with a
+stable executable path, icon and desktop/Start Menu shortcuts. Windows resource
+editing stays enabled while signing is disabled; this release is unsigned.
+Uninstall does not delete app data. No updater, background service or cloud
+backend is added. Installation succeeded and existing planner data remained
+byte-for-byte unchanged. Desktop/Start Menu shortcuts target the installed 0.3.0
+executable. Same-version reinstall succeeded, retained the shortcut target and
+`local.matthew.planner` shortcut identity, and left existing planner data unchanged.
+The installed executable also passes the complete isolated desktop workflow,
+including restart and the real local Work inbox/receipt flow.
+
+README now introduces connected ChatGPT Work input and user-facing features.
+It states the connected-computer/open-app requirements and manual reconciliation
+after offline messages. Documentation screenshots use only fabricated data in an
+isolated profile. Development details are linked separately. Live iCloud/mail/AI
+verification remains outside this release and no new claims of live access are made.
+
+Typecheck, lint, 119 unit regressions, production build and isolated development
+and unpacked-app desktop checks pass, including real Work CLI delivery/retry/undo
+and restart. Release documentation and ownership are tracked in TASKS.md.
+
 ## Lead integration review of 0.2.3
 
 Moved the existing selected-day fixed-event renderer and Add control to the
