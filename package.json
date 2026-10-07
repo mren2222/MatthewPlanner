@@ -1,0 +1,27 @@
+{
+  "name": "matthew-planner",
+  "productName": "Matthew Planner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first day and duration planner for Windows",
+  "main": "dist/electron/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "test": "vitest run",
+    "build": "node scripts/build.mjs",
+    "start": "electron .",
+    "package": "pnpm run build && electron-builder --win dir",
+    "package:portable": "pnpm run build && electron-builder --win portable",
+    "test:e2e": "node scripts/e2e.mjs"
+  },
+  "build": {
+    "appId": "local.matthew.planner",
+    "productName": "Matthew Planner",
+    "directories": { "output": "release" },
+    "files": ["dist/**", "package.json"],
+    "asar": true,
+    "win": { "target": ["dir"], "signAndEditExecutable": false }
+  }
+}

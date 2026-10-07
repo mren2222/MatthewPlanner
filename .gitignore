@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+.env
+.env.*
+!.env.example
+*.sqlite*
+*.secrets
+coverage/
+.worktrees/
+test-results/
+*.log
+screenshots/
