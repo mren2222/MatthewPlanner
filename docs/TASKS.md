@@ -27,6 +27,7 @@
 | U5 | Lead | Complete | U4 | workspace.css, calendar.css | Warm white surfaces, dark neutral text, olive accents, fewer panel dividers; date/Todo layout retained |
 | P1 | Lead | Complete; 0.3.0 installer verified | I5 U5 | package, electron/main, build, scripts | Per-user NSIS installer, fixed application identity and icon, desktop/Start Menu shortcuts, existing local data retained |
 | G1 | Lead | Complete | W1 P1 | README, docs/images, INSTALL, DEVELOPMENT | ChatGPT Work input and feature introduction; public screenshot uses fabricated data; downloadable Windows installer |
+| I6 | Lead | Complete; original plan restored | P1 W1 | docs/WORK_INPUT, INSTALL, REVIEW | Diagnose packaged-host AppData shadow, launch installed app through Explorer, compare all original records, document verified local bridge path; no DB/credential overwrite |
 
 Git author identity uses Matthew Ren and the approved GitHub noreply address for public commits. First three agents started with exclusive directory ownership before a base commit could be made; calendar used an isolated agent/calendar worktree, subsequently removed after integration. The public repository is https://github.com/mren2222/MatthewPlanner. Original pre-publication history is retained on a local backup branch. Live providers require user-supplied credentials, which are not blockers for offline MVP.
 

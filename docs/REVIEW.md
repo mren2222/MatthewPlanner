@@ -2,6 +2,20 @@
 
 ## Lead integration review of 0.3.0
 
+Post-release correction: the initial retention check observed the packaged
+Codex host's redirected AppData file, not the user's complete original file.
+Starting the installed app from that host inherited virtualization and showed
+an empty plan. Both copies were retained. A read-only check through the local
+machine's physical directory established the original records still existed.
+Launching through an existing Explorer window's Document.Application restored
+the installed app to its original data; every task, fixed event, activity and
+day note matched the original read-only export. A fresh bridge snapshot confirms
+the real app's revision. Direct new Shell.Application.ShellExecute was also tried
+and did not leave the packaged context. Installation and Work input documentation
+now explain the verified launch and bridge paths, preventing an empty shadow
+snapshot from being treated as a new plan. No database or credential overwrite
+was performed for recovery.
+
 Applied the approved warm-white/neutral-text/olive palette without changing
 planning, provider or bridge behavior. Removed the extra divider between the
 Todo and commitment columns. Reviewed the normal and narrow desktop layouts.

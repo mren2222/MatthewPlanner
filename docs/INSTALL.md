@@ -6,6 +6,11 @@
 首次切换到安装版之前，请保存 Notes 并正常关闭旧便携版。以后从快捷方式打开，
 避免同时启动旧便携版。安装版和旧版沿用 `%APPDATA%\Matthew Planner` 的计划与设置。
 
+如果从 Microsoft Store 版 Codex 直接启动后看到空白计划，先正常关闭该窗口，
+再从 Windows 桌面或开始菜单快捷方式打开。Windows 的应用隔离可能让 Codex 启动的
+进程读取另一份 AppData 数据。原计划仍可能完整存在于真实用户目录，不要覆盖数据库。
+已连接助手的入口排查见 [Work 输入说明](WORK_INPUT.md#windows-packaged-host-isolation)。
+
 打开安装版后，右键任务栏上的 Matthew Planner 图标，选择「固定到任务栏」。
 以后的安装包会更新同一安装位置，应用标识和快捷方式名称保持不变。
 通过这个入口打开的是已安装的最新版本；软件不会自行从 GitHub 下载更新。

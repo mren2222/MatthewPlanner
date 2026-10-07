@@ -46,6 +46,35 @@ Grant the connected task access to this repository and the **bridge subfolder**
 access to credentials.secrets. The CLI accepts `--bridge-dir` for isolated tests.
 The normal app uses its own userData bridge path.
 
+### Windows packaged-host isolation
+
+On this computer, launching Planner directly from the Microsoft Store Codex
+process can inherit AppData virtualization and open a separate empty data file.
+Start the installed Planner from its desktop/Start Menu/taskbar shortcut. If an
+agent must start it, use the Shell application obtained from an existing Explorer
+window's `Document.Application`; creating a new Shell.Application and calling
+ShellExecute directly still inherited the isolated context in the verified case.
+
+The original plan remains in the real Windows user's AppData directory. The
+packaged agent can also see a stale, empty shadow snapshot at the default path.
+For this connected computer, the verified bridge path that bypasses that shadow is:
+
+```powershell
+node scripts/planner.mjs snapshot --bridge-dir '\\localhost\C$\Users\Matthew\AppData\Roaming\Matthew Planner\bridge'
+node scripts/planner.mjs apply --file .planner-bridge/request.json --bridge-dir '\\localhost\C$\Users\Matthew\AppData\Roaming\Matthew Planner\bridge'
+```
+
+Use the same verified directory for snapshot, delivery and receipt checks. This
+is a local-machine administrative share, not a remote/cloud server; access is
+dependent on the Windows account and may not work on another computer. If it is
+unavailable, use an authorized non-packaged local host rather than assuming an
+empty shadow snapshot is the current plan. Do not copy, overwrite or delete
+database or credential files to work around this issue.
+
+The 0.3.0 recovery check read the original database without writing it, relaunched
+the installed app through Explorer, then verified every task, fixed event,
+activity and day note against its refreshed bridge snapshot.
+
 Flexible Todo items carry dates and optional durations only. Record completed
 work using complete_task for an existing task or create_completed_task for
 clearly identified missing work. Completed blocks remain local. Fixed events
