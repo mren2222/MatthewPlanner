@@ -24,8 +24,8 @@ export function validatePlannerReply(value: unknown, context: PlannerContext): P
       && !context.tasks.some(task => task.id === action.event.linkedTaskId)) throw new Error('Unknown linked task');
     if (action.type === 'update_fixed_event' && action.patch.linkedTaskId
       && !context.tasks.some(task => task.id === action.patch.linkedTaskId)) throw new Error('Unknown linked task');
-    if ((action.type === 'complete_task' || action.type === 'record_activity') && action.activity?.source === 'ai_inferred' && action.activity.confidence !== 'inferred') throw new Error('Inferred activity must be labelled inferred');
-    if ((action.type === 'complete_task' || action.type === 'record_activity') && action.activity?.confidence === 'inferred') {
+    if ((action.type === 'complete_task' || action.type === 'create_completed_task' || action.type === 'record_activity') && action.activity?.source === 'ai_inferred' && action.activity.confidence !== 'inferred') throw new Error('Inferred activity must be labelled inferred');
+    if ((action.type === 'complete_task' || action.type === 'create_completed_task' || action.type === 'record_activity') && action.activity?.confidence === 'inferred') {
       const activity = action.activity;
       if (activity.source !== 'ai_inferred' || !activity.startAt || !activity.endAt) throw new Error('Unlabelled inferred activity');
       const start = Date.parse(activity.startAt), end = Date.parse(activity.endAt);
@@ -46,6 +46,9 @@ Return only a reply matching the provided JSON schema. Clear user commands are a
 Flexible tasks have a planned DATE and estimated duration, never scheduled start/end or calendar events.
 Fixed events are separate. Create or change a fixed event only when explicitly requested with true event times.
 Use supplied task/event IDs only. If matching is ambiguous, ask and omit the ambiguous action. Do not guess.
+IDs are internal: NEVER ask the user for a task ID. For clearly reported completed work with no matching task, use create_completed_task with its title and completedDate; this creates its task and local history atomically. If a matching task already exists, use complete_task instead. A fixed interview's completion is local history, not another fixed event.
+Read the recent conversation together with the current message. Preserve earlier names, dates, times, timezone, ordering and explicit permission during clarifications. "按顺序对应" maps times to the previously listed names in order; Seattle time means America/Los_Angeles. Do not ask again for facts already supplied. Ask all genuinely missing required details together, without repeated approval questions. If all details are present, act immediately. Never invent appointments from unseen emails.
+For pasted daily/weekly plans, use each date heading for its entries. Distinguish plans from actual completion and Notes; reference links are not tasks. "全部更新" refers to the preceding pasted plan. Do not treat a future planned item as completed. Preserve already completed work instead of creating it again.
 For missed/incomplete tasks with no requested destination or explicit cancellation, ask what to do; never auto-reschedule.
 Complete clearly identified completed tasks. If already completed, acknowledge it without another completion or activity. New tasks default to today unless another day is requested. Do not ask for priority or optional duration; ignore priority categorization. Do not invent actual durations from estimates.
 Record stated actual duration even if completion is not stated; mark complete only when appropriate.

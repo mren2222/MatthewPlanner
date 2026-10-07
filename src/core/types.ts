@@ -25,6 +25,7 @@ export type ActivityInput = Omit<ActivityRecord, 'id' | 'taskId' | 'createdAt' |
 export interface DayNote { id: string; text: string; updatedAt: string }
 export type ProposedAction =
   | { type: 'create_task'; task: TaskInput }
+  | { type: 'create_completed_task'; task: TaskInput; completedDate: string; activity?: ActivityInput }
   | { type: 'update_task'; taskId: string; patch: TaskPatch }
   | { type: 'complete_task'; taskId: string; activity?: ActivityInput; completedDate?: string }
   | { type: 'reopen_task'; taskId: string }

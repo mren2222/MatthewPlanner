@@ -79,6 +79,43 @@ describe('offline representative planning', () => {
 });
 
 describe('live provider boundary', () => {
+  it('retains interview facts through the user-reported clarification sequence', async () => {
+    const state = context();
+    const conversation = [
+      ['user', '周五是magnix和dynamic research inc'], ['assistant', '请提供时间。'],
+      ['user', '一个11一个14 西雅图时间'], ['assistant', '请说明对应关系。'],
+      ['user', '按顺序对应 需要创建'], ['assistant', '每场持续多久？'],
+      ['user', '半个小时'], ['assistant', '请提供日期。'], ['user', '这周五'],
+    ] as const;
+    state.messages = conversation.map(([role, content], i) => ({ id: String(i), role, content, createdAt: state.now }));
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (_url, init) => {
+      const body = JSON.parse(init?.body as string), input = JSON.parse(body.input);
+      expect(input.context.messages.map((entry: {content: string}) => entry.content)).toEqual(conversation.map(([,content]) => content));
+      expect(body.instructions).toContain('Do not ask again for facts already supplied');
+      return fakeResponse({ message: '已添加两场周五面试。', actions: [
+        { type: 'create_fixed_event', event: { title: 'Magnix 面试', startAt: '2026-10-09T11:00:00-07:00', endAt: '2026-10-09T11:30:00-07:00', timezone: state.timezone } },
+        { type: 'create_fixed_event', event: { title: 'Dynamic Research Inc 面试', startAt: '2026-10-09T14:00:00-07:00', endAt: '2026-10-09T14:30:00-07:00', timezone: state.timezone } },
+      ] });
+    });
+    const reply = await createPlannerReply('这周五', state, { apiKey: 'test-key', model: 'gpt-5.6-luna', fetch: fetchMock });
+    expect(reply.actions).toHaveLength(2); expect(reply.clarification).toBeUndefined();
+  });
+  it('keeps Notes at the end of a pasted weekly plan and bounds long histories', () => {
+    const state = context(), plan = '## 10/07 周三\n' + '准备项目介绍\n'.repeat(400) + '\nNotes\nDRI面试很顺利，明天还有Amazon Leo';
+    state.messages = Array.from({ length: 70 }, (_,i) => ({ id:String(i), role:'user', content:'旧消息'.repeat(500), createdAt:state.now }));
+    state.messages.push({ id:'plan',role:'user',content:plan,createdAt:state.now }, { id:'update',role:'user',content:'全部更新',createdAt:state.now });
+    const projected = buildPlannerContext(state);
+    expect(projected.messages.at(-2)?.content).toContain('明天还有Amazon Leo');
+    expect(projected.messages.at(-1)?.content).toBe('全部更新');
+    expect(projected.messages.length).toBeLessThanOrEqual(40);
+    expect(projected.messages.reduce((sum,entry)=>sum+entry.content.length,0)).toBeLessThanOrEqual(48000);
+    expect(projected.conversationTruncated).toBe(true);
+  });
+  it('supports completion reported by title without requiring a pre-existing internal ID', () => {
+    const reply = validatePlannerReply({ message:'已记录 DRI 面试完成', actions:[{ type:'create_completed_task',task:{title:'DRI 面试'},completedDate:'2026-10-07' }] },context());
+    expect(reply.actions[0].type).toBe('create_completed_task');
+    expect(()=>validatePlannerReply({ message:'invalid',actions:[{ type:'create_completed_task',task:{title:'DRI 面试',scheduledStart:'08:00'},completedDate:'2026-10-07' }] },context())).toThrow();
+  });
   it('uses low reasoning for Luna and accepts text split across output blocks', async () => {
     const wire = JSON.stringify({ message: 'Move Portfolio', clarification: null, actions: [{ type: 'move_task', taskId: 'portfolio', plannedDate: '2026-10-09' }] });
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output: [

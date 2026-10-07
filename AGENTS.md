@@ -10,3 +10,4 @@
 - Add meaningful tests for important behavior, especially action validation, undo, persistence, ambiguity, and calendar isolation.
 - Prefer maintainable direct implementations. Do not introduce cloud infrastructure or automatic time blocking.
 - Keep ownership boundaries and docs/TASKS.md current. Review integration before commits.
+- For routine Codex/Work planning, use docs/WORK_INPUT.md and scripts/planner.mjs. Never write SQLite directly. Only clear user-authorized actions may enter the local inbox; verify receipts and retain request IDs for exact retries. Computer connection and an open app are required; this interface has no iCloud publishing operation.

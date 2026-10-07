@@ -1,6 +1,9 @@
 import { _electron as electron, expect } from '@playwright/test';
 import electronPath from 'electron';
-import { mkdtemp, mkdir, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -27,6 +30,20 @@ try{
   assert.equal(await page.evaluate(()=>typeof window.require),'undefined');
   assert.equal((await state(page)).settings.aiModel,'gpt-5.6-luna');
   await expect(page.getByTestId('chat-input')).toHaveCount(0);
+  // Real local Work/Codex delivery through the CLI, Electron inbox, validated
+  // ActionService and persistent receipt; never through direct SQLite writes.
+  const bridgeDir=resolve(dataDir,'bridge'),exec=promisify(execFile);
+  const initial=JSON.parse((await exec(process.execPath,['scripts/planner.mjs','snapshot','--bridge-dir',bridgeDir])).stdout);
+  assert.equal(initial.settings,undefined);
+  const requestPath=resolve(dataDir,'work-request.json');
+  await writeFile(requestPath,JSON.stringify({id:randomUUID(),expectedRevision:initial.revision,sourceMessage:'Work：DRI面试已完成',actions:[{type:'create_completed_task',task:{title:'DRI 面试记录'},completedDate:'2000-01-02'}]}));
+  const delivered=JSON.parse((await exec(process.execPath,['scripts/planner.mjs','apply','--file',requestPath,'--bridge-dir',bridgeDir])).stdout);
+  assert.equal(delivered.status,'applied');
+  const deliveredState=await state(page);assert.equal(deliveredState.tasks[0].status,'completed');assert.equal(deliveredState.activities.length,1);assert.equal(deliveredState.fixedEvents.length,0);
+  await exec(process.execPath,['scripts/planner.mjs','apply','--file',requestPath,'--bridge-dir',bridgeDir]);
+  assert.deepEqual((await state(page)).tasks,deliveredState.tasks);
+  await page.evaluate(()=>window.planner.undo());await page.reload();await ready(page);
+  const undoneState=await state(page);assert.equal(undoneState.tasks.length,0);assert.equal(undoneState.activities.length,0);
   await createTask(page,'Portfolio',60);await createTask(page,'DRI follow-up',30);await createTask(page,'整理联系人');
   assert.equal((await state(page)).tasks.find(task=>task.title==='整理联系人').estimatedDurationMinutes,undefined);
   await expect(page.getByTestId('week-overview')).not.toContainText('Portfolio');
@@ -72,9 +89,15 @@ try{
   await page.getByRole('button',{name:'设置',exact:true}).click();await page.getByLabel('OpenAI API key',{exact:true}).fill('unit-only-do-not-call');await page.getByRole('button',{name:'保存设置',exact:true}).click();await expect(page.getByLabel('OpenAI API key',{exact:true})).toHaveValue('');await page.getByRole('button',{name:'关闭对话框',exact:true}).click();
   assert.equal((await readFile(resolve(dataDir,'credentials.secrets'))).includes(Buffer.from('unit-only-do-not-call')),false);
   await page.evaluate(async()=>{const state=await window.planner.snapshot();await window.planner.apply([{type:'create_task',task:{title:'Redaction check',notes:'unit-only-do-not-call'}}],state.revision);});
-  const protectedState=await state(page);assert.equal(JSON.stringify(protectedState).includes('unit-only-do-not-call'),false);assert.equal(errors.length,0,errors.join('; '));
+  let protectedState=await state(page);assert.equal(JSON.stringify(protectedState).includes('unit-only-do-not-call'),false);assert.equal(errors.length,0,errors.join('; '));
+  await writeFile(requestPath,JSON.stringify({id:randomUUID(),expectedRevision:protectedState.revision,sourceMessage:'unit-only-do-not-call',actions:[{type:'create_task',task:{title:'Work redaction check',notes:'unit-only-do-not-call'}}]}));
+  const redactedDelivery=JSON.parse((await exec(process.execPath,['scripts/planner.mjs','apply','--file',requestPath,'--bridge-dir',bridgeDir])).stdout);
+  assert.equal(redactedDelivery.status,'applied');protectedState=await state(page);
+  assert.equal(JSON.stringify(protectedState).includes('unit-only-do-not-call'),false);
+  const bridgeSnapshot=(await exec(process.execPath,['scripts/planner.mjs','snapshot','--bridge-dir',bridgeDir])).stdout;
+  assert.equal(bridgeSnapshot.includes('unit-only-do-not-call'),false);assert.equal(JSON.parse(bridgeSnapshot).settings,undefined);
   await app.close();app=undefined;page=await launch();const restarted=await state(page);
   for(const key of ['revision','tasks','fixedEvents','activities','dayNotes','messages','proposals','history'])assert.deepEqual(restarted[key],protectedState[key],`Restart changed ${key}`);
   await page.screenshot({path:'test-results/desktop-final.png'});
-  console.log('Desktop verification passed: daily layout, direct chat/discussion, one-click completion/reopen/undo, local history editing/dragging, next-day events, Notes, week view, responsive chat, secure links/storage, failed sync preservation and restart.');console.log(`Isolated data: ${dataDir}`);
+  console.log('Desktop verification passed: local Work CLI delivery/retry/undo/redaction, daily layout, direct chat/discussion, completion/reopen, local history, next-day events, Notes, week view, secure storage, failed sync preservation and restart.');console.log(`Isolated data: ${dataDir}`);
 }catch(error){if(app){const page=await app.firstWindow();await page.screenshot({path:'test-results/desktop-failure.png'}).catch(()=>undefined);console.error('Visible errors:',await page.getByRole('alert').allTextContents());}throw error;}finally{if(app)await app.close();}

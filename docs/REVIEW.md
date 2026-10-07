@@ -1,5 +1,13 @@
 # Independent review
 
+## Lead integration review of 0.2.1
+
+Confirmed root cause of the supplied conversation: a six-message/600-character projection dropped original company/time facts and pasted Notes. The larger bounded, redacted projection retains the reported sequence; model instructions require using earlier facts and never requesting user-supplied IDs. create_completed_task is Lead-owned and creates/completes through the existing transaction/audit/undo path, deduplicating same-title/day repeats. Automated payload checks are not live model-quality proof.
+
+The local Work/Codex bridge has no HTTP listener, provider writes, credential export or direct DB-writing CLI. Main serializes inbox handling with existing commands, sanitizes actions/source text and uses canonical validation. Snapshot excludes settings and chat/audit bodies. Revision checks reject stale writes. The application commits delivery receipts atomically with changes; retries survive restart and cannot replay an undone action. Changed payloads under reused IDs are rejected. Wire fingerprints prevent the CLI from mistaking an old result for a changed request's success. Invalid/malformed/oversized requests fail safely. Imported events remain read-only and completion never creates a CalendarProvider object.
+
+119 unit regressions, type/lint and the production build pass. Both development and packaged CLI-to-Electron workflows cover delivery, repeat safety, credential redaction and Undo in isolated data, in addition to existing UI/restart checks. Account-side Work Cloud local connection and live AI remain user-side checks. iCloud debugging was explicitly deferred; this release makes no calendar-provider change. Portable packaging is tracked in TASKS.md.
+
 ## Lead review of approved 0.2.0 redesign
 
 Shared contracts and ownership were updated by Lead. 108 regressions, typecheck, lint, production build and isolated development/packaged desktop workflows pass. No agent delegation or authenticated live provider test was performed in this iteration.

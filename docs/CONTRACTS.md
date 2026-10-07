@@ -2,6 +2,8 @@
 
 Canonical definitions: src/core/types.ts. Do not independently redefine them.
 
+0.2.1 Lead addition: create_completed_task(task, completedDate, optional activity) atomically creates missing completed work and local activity, or reuses a unique same-title/planned-date active task. No model-generated task IDs or forward references are accepted. The main-owned file bridge uses existing ProposedAction contracts; ActionService.applyExternal provides durable exactly-once receipts and normal revision/audit/transaction/undo behavior. Receipt rows are internal and are not erased by Undo. See WORK_INPUT.md.
+
 Task includes status inbox/planned/completed/cancelled, ISO local date (YYYY-MM-DD), minutes, priority, category/project, deadline, notes and confidence-labelled actual history. No scheduled time fields.
 
 FixedEvent contains ISO timestamps, timezone, location, source local/icloud and optional external identifiers. ActivityRecord stores actual minutes and optional timestamps with exact/approximate/inferred confidence.

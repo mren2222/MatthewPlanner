@@ -42,6 +42,7 @@ export const activityInputSchema = z.object({
   .refine(value => !value.startAt || !value.endAt || Date.parse(value.endAt) > Date.parse(value.startAt), 'Activity end must follow start');
 const action = z.discriminatedUnion('type', [
   z.object({ type: z.literal('create_task'), task: taskInput }).strict(),
+  z.object({ type: z.literal('create_completed_task'), task: taskInput, completedDate: localDateSchema, activity: activityInputSchema.optional() }).strict(),
   z.object({ type: z.literal('update_task'), taskId: id, patch: taskPatch }).strict(),
   z.object({ type: z.literal('complete_task'), taskId: id, activity: activityInputSchema.optional(), completedDate: localDateSchema.optional() }).strict(),
   z.object({ type: z.literal('reopen_task'), taskId: id }).strict(),

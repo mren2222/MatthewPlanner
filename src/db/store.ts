@@ -1,5 +1,5 @@
 import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, openSync, writeFileSync, fsyncSync, closeSync, renameSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { z } from 'zod';
@@ -12,7 +12,7 @@ type Entity = Task | FixedEvent | DayNote | ActivityRecord;
 type Table = 'tasks' | 'events' | 'activities' | 'days' | 'emails';
 interface Change { table: Table; id: string; before: string | null; after: string | null }
 interface Batch { id: string; origin: 'manual' | 'ai' | 'calendar'; changes: Change[]; undone: boolean }
-const tables = ['tasks', 'events', 'activities', 'days', 'emails', 'history', 'messages', 'proposals', 'batches'] as const;
+const tables = ['tasks', 'events', 'activities', 'days', 'emails', 'history', 'messages', 'proposals', 'batches', 'external_requests'] as const;
 const messageSchema = z.object({ id: z.string().min(1), role: z.enum(['user', 'assistant']), content: z.string().min(1).max(100000), createdAt: timestampSchema, proposalId: z.string().min(1).optional() }).strict();
 const proposalSchema = z.object({ id: z.string().min(1), message: z.string().min(1).max(100000), actions: z.unknown(), clarification: z.string().optional(), baseRevision: z.number().int().nonnegative(), sourceMessage: z.string(), status: z.enum(['pending', 'applied', 'cancelled']), createdAt: timestampSchema }).strict();
 
@@ -104,6 +104,26 @@ export class PlannerStore {
     this.transaction(() => this.batch(origin, batchId => { for (const action of actions) this.applyAction(action, batchId, origin, sourceMessage); }));
     return this.snapshotData();
   }
+  applyExternal(requestId: string, input: ProposedAction[], expectedRevision: number, sourceMessage: string): { revision: number } {
+    z.string().uuid().parse(requestId);
+    const actions = validateActions(input);
+    z.string().min(1).max(10000).parse(sourceMessage);
+    const hash = createHash('sha256').update(JSON.stringify({ actions, expectedRevision, sourceMessage })).digest('hex');
+    const previous = this.raw('external_requests', requestId);
+    if (previous) {
+      const receipt = JSON.parse(previous) as { hash: string; revision: number };
+      if (receipt.hash !== hash) throw new Error('This request ID was already used for different changes.');
+      return { revision: receipt.revision };
+    }
+    this.requireRevision(expectedRevision);
+    this.transaction(() => {
+      this.batch('manual', batchId => { for (const action of actions) this.applyAction(action, batchId, 'manual', sourceMessage); });
+      // Receipt and changes commit together. Undo does not erase receipts:
+      // retrying a delivered request must never reapply an undone operation.
+      this.write('external_requests', requestId, { hash, revision: this.revision });
+    });
+    return { revision: this.revision };
+  }
   applyProposal(id: string): Data {
     this.assertOpen();
     const proposal = this.get<Proposal>('proposals', id);
@@ -145,6 +165,19 @@ export class PlannerStore {
       const task = this.get<Task>('tasks', before.taskId);
       this.write('activities', after.id, after); this.refreshActivity(task); this.write('tasks', task.id, task);
       this.audit(batchId, action.type, after.id, before, after, origin, sourceMessage); return;
+    }
+    if (action.type === 'create_completed_task') {
+      // No model-generated IDs or forward references. Create and complete in
+      // this same validated transaction, reusing the normal completion path.
+      const matches = this.all<Task>('tasks').filter(task => task.title.trim().toLocaleLowerCase() === action.task.title.trim().toLocaleLowerCase()
+        && task.plannedDate === (action.task.plannedDate ?? action.completedDate) && task.status !== 'cancelled');
+      if (matches.length > 1) throw new Error('Several tasks match this completed work. Specify which task.');
+      let task = matches[0];
+      if (!task) {
+        task = { ...action.task, plannedDate: action.task.plannedDate ?? action.completedDate, id: randomUUID(), status: 'planned', priority: action.task.priority ?? 'normal', createdAt: now, updatedAt: now };
+        this.write('tasks', task.id, task); this.audit(batchId, 'create_task', task.id, null, task, origin, sourceMessage);
+      }
+      this.applyAction({ type: 'complete_task', taskId: task.id, completedDate: action.completedDate, activity: action.activity }, batchId, origin, sourceMessage); return;
     }
     if (action.type === 'create_task') {
       const task: Task = { ...action.task, id: randomUUID(), status: action.task.plannedDate ? 'planned' : 'inbox', priority: action.task.priority ?? 'normal', createdAt: now, updatedAt: now };

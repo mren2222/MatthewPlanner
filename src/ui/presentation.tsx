@@ -50,6 +50,7 @@ export function actionLabel(action: ProposedAction, snapshot: Pick<PlannerSnapsh
   const activityLabel = (activity: { durationMinutes: number; confidence: string; startAt?: string; endAt?: string }) => `${duration(activity.durationMinutes)} actual · ${activity.confidence}${activity.startAt ? ` · ${fullTime(activity.startAt)} → ${activity.endAt ? fullTime(activity.endAt) : 'end unknown'}` : ' · no interval recorded'}`;
   switch (action.type) {
     case 'create_task': return `Add task · ${values(action.task as unknown as Record<string,unknown>)}${action.task.plannedDate ? '' : ' · Inbox'}`;
+    case 'create_completed_task': return `记录完成 · ${action.task.title} · ${dateLabel(action.completedDate)}`;
     case 'move_task': return `Move “${task}” → ${dateLabel(action.plannedDate)}`;
     case 'complete_task': return `Complete “${task}”${action.activity ? ` · ${activityLabel(action.activity)}` : ' · actual duration unknown'}`;
     case 'reopen_task': return '恢复任务';

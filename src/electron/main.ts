@@ -16,6 +16,7 @@ import { ICloudCalendarProvider, type CalendarProvider } from '../calendar';
 import { authorizeGmail, DEFAULT_MAIL_QUERY, GmailReader } from '../mail/gmail';
 import { directReply, isDiscussion } from '../services/chat-policy';
 import { emailActions } from '../mail/actions';
+import { LocalPlannerBridge } from '../services/local-bridge';
 
 app.setName('Matthew Planner');
 const testMode = process.env.PLANNER_E2E === '1';
@@ -30,6 +31,8 @@ let config: PrivateSettings = {};
 let calendar: CalendarProvider | undefined;
 let calendarSync: SyncStatus = { state: 'idle' };
 let syncTimer: ReturnType<typeof setInterval> | undefined;
+let bridgeTimer: ReturnType<typeof setInterval> | undefined;
+let bridgeScheduled = false;
 let syncScheduled = false;
 let mailCandidates: MailCandidate[] = [];
 let mailStatus = '';
@@ -143,12 +146,24 @@ async function start(): Promise<void> {
   try { config = vault.read(); } catch (error) { credentialWarning = error instanceof Error ? error.message : 'Saved credentials are unavailable. Reconfigure them in Settings.'; }
   store = await createStore(join(app.getPath('userData'), 'planner.sqlite'), join(__dirname, 'sql-wasm.wasm'));
   actions = new ActionService(store);
+  const bridge = new LocalPlannerBridge(join(app.getPath('userData'), 'bridge'), () => {
+    const data = snapshot();
+    return JSON.parse(JSON.stringify({ revision:data.revision,today:localDate(),timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+      tasks:data.tasks,fixedEvents:data.fixedEvents,activities:data.activities,dayNotes:data.dayNotes },
+    (_key,value)=>typeof value==='string' ? redactCredentials(value) : value));
+  }, request => actions.applyExternal(request.id,localActions(request.actions),request.expectedRevision,redactCredentials(request.sourceMessage)), redactCredentials);
+  bridge.refresh();
+  bridgeTimer = setInterval(() => {
+    if (bridgeScheduled) return;
+    bridgeScheduled = true;
+    void serialize(() => bridge.process()).catch(() => undefined).finally(() => { bridgeScheduled = false; });
+  },1000);
   if (credentialWarning) store.addMessage({ id: randomUUID(), role: 'assistant', content: `${credentialWarning} Local planning remains available.`, createdAt: new Date().toISOString() });
   handle('snapshot', snapshot);
   handle('apply', (input: unknown, revision: unknown) => { actions.apply(localActions(input), z.number().int().nonnegative().parse(revision), 'manual'); return snapshot(); });
   handle('undo', () => { actions.undo(); return snapshot(); });
   handle('chat', async (input: unknown) => {
-    const message = redactCredentials(z.string().trim().min(1).max(10000).parse(input));
+    const message = redactText(stripKnownSecrets(z.string().trim().min(1).max(16000).parse(input)),16000);
     const baseRevision = store.snapshotData().revision;
     store.addMessage({ id: randomUUID(), role: 'user', content: message, createdAt: new Date().toISOString() });
     const reply = await createPlannerReply(message, context(), { apiKey: config.openaiKey || process.env.OPENAI_API_KEY, model: snapshot().settings.aiModel });
@@ -236,5 +251,5 @@ async function start(): Promise<void> {
 }
 app.on('second-instance', () => { window?.show(); window?.focus(); });
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => { if (syncTimer) clearInterval(syncTimer); store?.close(); });
+app.on('before-quit', () => { if (syncTimer) clearInterval(syncTimer); if (bridgeTimer) clearInterval(bridgeTimer); store?.close(); });
 if (ownsInstance) start().catch(error => { dialog.showErrorBox('Matthew Planner could not start', error instanceof Error ? error.message : 'Startup failed.'); app.quit(); });

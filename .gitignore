@@ -11,3 +11,4 @@ coverage/
 test-results/
 *.log
 screenshots/
+.planner-bridge/

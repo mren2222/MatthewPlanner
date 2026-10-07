@@ -1,10 +1,12 @@
 # Matthew Planner
 
+0.2.1 adds a local Codex/connected ChatGPT Work input bridge, preserves longer clarification conversations, and records completed work that has no existing task. See [Work input setup](docs/WORK_INPUT.md). The computer must be connected and the app open; cloud-only chats cannot access local data. iCloud troubleshooting is deferred at the user's request.
+
 A local-first Windows desktop planner. Flexible tasks have a **planned day and optional estimated duration**. Appointments have exact times and live separately as fixed events. Clear chat commands apply directly with undo; discussion and ambiguity leave the plan unchanged.
 
 ## Launch
 
-- Portable application: `release/Matthew Planner 0.2.0.exe`.
+- Portable application: `release/Matthew Planner 0.2.1.exe`.
 - Application folder: double-click `release/win-unpacked/Matthew Planner.exe`. Keep the whole win-unpacked folder together.
 - These are local, unsigned Windows x64 builds. No account or API key is required for local planning.
 

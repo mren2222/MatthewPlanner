@@ -23,6 +23,7 @@ const action = (type: string, fields: Record<string, unknown>) => object({ type:
 export const plannerReplySchema = object({ message: string, clarification: nullableString,
   actions: { type: 'array', maxItems: 30, items: { anyOf: [
     action('create_task', { task }), action('update_task', { taskId: string, patch: taskPatch }),
+    action('create_completed_task', { task, completedDate: string, activity: nullable(activity) }),
     action('complete_task', { taskId: string, activity: nullable(activity), completedDate: nullableString }),
     action('reopen_task', { taskId: string }), action('set_day_note', { date: string, text: string }),
     action('cancel_task', { taskId: string }), action('move_task', { taskId: string, plannedDate: string }),

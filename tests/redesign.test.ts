@@ -14,6 +14,27 @@ async function setup() { const folder = mkdtempSync(join(tmpdir(), 'planner-rede
 afterEach(() => { stores.splice(0).forEach(store => store.close()); folders.splice(0).forEach(folder => rmSync(folder,{recursive:true,force:true})); });
 const task: Task = { id:'t',title:'Resume',status:'planned',priority:'normal',estimatedDurationMinutes:60,createdAt:'2026-10-07T00:00:00Z',updatedAt:'2026-10-07T00:00:00Z' };
 describe('local completion history', () => {
+  it('creates missing completed work atomically, deduplicates repeats, persists and undoes both task and history', async () => {
+    const {store,path}=await setup();
+    const action = {type:'create_completed_task' as const,task:{title:'DRI 面试'},completedDate:'2000-01-02'};
+    store.apply([action],0,'ai','DRI面试很顺利');
+    const completed=store.snapshotData();
+    expect(completed.tasks).toHaveLength(1);expect(completed.tasks[0]).toMatchObject({status:'completed',plannedDate:'2000-01-02'});
+    expect(completed.activities).toHaveLength(1);expect(completed.fixedEvents).toEqual([]);
+    expect(completed.history.map(entry=>entry.actionType)).toEqual(['create_task','complete_task']);
+    store.apply([action],completed.revision);expect(store.snapshotData()).toEqual(completed);
+    store.close();const reopened=await createStore(path);stores.push(reopened);expect(reopened.snapshotData()).toEqual(completed);
+    reopened.undo();expect(reopened.snapshotData().tasks).toEqual([]);expect(reopened.snapshotData().activities).toEqual([]);
+  });
+  it('rolls back creation if a completion date is invalid and reuses an existing matching active task',async()=>{
+    const {store}=await setup();const before=store.snapshotData();
+    expect(()=>store.apply([{type:'create_completed_task',task:{title:'Future'},completedDate:'2999-01-01'}],0)).toThrow('future');expect(store.snapshotData()).toEqual(before);
+    store.apply([{type:'create_task',task:{title:'DRI 面试',plannedDate:'2000-01-02'}}],0);
+    const id=store.snapshotData().tasks[0].id;
+    store.apply([{type:'create_completed_task',task:{title:'DRI 面试'},completedDate:'2000-01-02'}],1);
+    expect(store.snapshotData().tasks).toHaveLength(1);expect(store.snapshotData().tasks[0].id).toBe(id);
+    store.undo();expect(store.snapshotData().tasks[0].status).toBe('planned');expect(store.snapshotData().activities).toEqual([]);
+  });
   it('places retrospective intervals outside existing history and keeps source information', () => {
     const record: ActivityRecord = { id:'r',taskId:'other',startAt:'2026-10-07T10:30:00Z',endAt:'2026-10-07T11:30:00Z',durationMinutes:60,confidence:'exact',source:'manual',createdAt:'2026-10-07T11:30:00Z' };
     expect(completionActivity(task,[record],[],new Date('2026-10-07T12:00:00Z'))).toMatchObject({ startAt:'2026-10-07T09:30:00.000Z',endAt:'2026-10-07T10:30:00.000Z',confidence:'inferred',source:'ai_inferred' });

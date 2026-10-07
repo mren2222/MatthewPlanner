@@ -12,6 +12,17 @@ export function redactText(value: string, limit = 800): string {
 }
 
 export function buildPlannerContext(context: PlannerContext, message = '') {
+  // Keep the whole recent clarification thread, including long pasted plans.
+  // The former six-message/600-character window dropped names and times while
+  // asking follow-up questions, and discarded the Notes at the end of a plan.
+  const messages: { role: string; content: string }[] = [];
+  let remaining = 48000;
+  for (const entry of context.messages.slice(-40).reverse()) {
+    const content = redactText(entry.content, entry.role === 'user' ? 16000 : 2400);
+    if (content.length > remaining) break;
+    messages.unshift({ role: entry.role, content });
+    remaining -= content.length;
+  }
   const rank = (task: Task) =>
     (message.toLowerCase().includes(task.title.toLowerCase()) ? 100 : 0)
     + (task.plannedDate === context.today ? 20 : 0)
@@ -35,8 +46,8 @@ export function buildPlannerContext(context: PlannerContext, message = '') {
       confidence: activity.confidence })),
     history: context.history.slice(-30).map(entry => ({ actionType: entry.actionType,
       entityId: entry.entityId, timestamp: entry.timestamp, undone: entry.undone })),
-    messages: context.messages.slice(-6).map(entry => ({ role: entry.role,
-      content: redactText(entry.content, 600) })),
+    messages,
+    conversationTruncated: messages.length < context.messages.length,
     truncated: context.tasks.length > 80 || context.fixedEvents.length > 30,
   };
 }
