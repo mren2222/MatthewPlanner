@@ -4,7 +4,7 @@ A local-first Windows desktop planner. Flexible tasks have a **planned day and e
 
 ## Launch
 
-- Portable application: `release/Matthew Planner 0.1.1.exe`.
+- Portable application: `release/Matthew Planner 0.1.2.exe`.
 - Application folder: double-click `release/win-unpacked/Matthew Planner.exe`. Keep the whole win-unpacked folder together.
 - These are local, unsigned Windows x64 builds. No account or API key is required for local planning.
 
@@ -16,7 +16,7 @@ The right-hand chat stores your conversation and proposed actions locally. Witho
 
 ## Optional connections
 
-In **Settings**, enter an OpenAI API key and a model supporting Responses structured output. The model is configurable; its initial value is `gpt-4o-mini`. Configured chat sends bounded task/history/chat context to OpenAI with API response storage disabled. Calendar credentials are excluded and known secrets are redacted. See [AI behavior and limits](docs/AI.md).
+In **Settings**, enter an OpenAI API key and a model supporting Responses structured output. The model is configurable; its initial value is `gpt-5.6-luna`. Version 0.1.2 also upgrades the previously saved `gpt-4o-mini` default to Luna. Subsequent explicitly saved model choices are respected. Luna requests use low reasoning effort, an 8,000-token output budget and a 60-second timeout. Configured chat sends bounded task/history/chat context to OpenAI with API response storage disabled. Calendar credentials are excluded and known secrets are redacted. See [AI behavior and limits](docs/AI.md).
 
 For iCloud, generate an Apple app-specific password with two-factor authentication enabled, save your Apple Account and password in Settings, choose **List calendars**, select a calendar, **Save settings**, then **Sync fixed events**. Apple setup steps and research sources are in [iCloud integration](docs/ICLOUD.md).
 
@@ -70,6 +70,6 @@ Electron main owns SQLite, OS-encrypted credentials, AI and CalDAV networking. T
 
 SQLite runs through sql.js to avoid native ABI/rebuild dependencies. The persistent file is ordinary SQLite, with schema version 1 and one main-process writer. Whole-file atomic persistence is appropriate for this personal MVP; very large databases should move to a native SQLite implementation.
 
-Validation includes 71 unit/presentation/provider tests, TypeScript, lint, production and development builds, and the packaged Windows executable's desktop flows, including restart persistence and DPAPI credential storage. Provider tests use mocked responses, including mainland-China iCloud discovery; no real API/calendar credentials are in fixtures. Independent review findings and fixes are recorded in [review notes](docs/REVIEW.md).
+Validation includes 83 unit/presentation/provider tests, TypeScript, lint, production and development builds, and the packaged Windows executable's desktop flows, including restart persistence and DPAPI credential storage. Provider tests use mocked responses, including mainland-China iCloud discovery, Luna reasoning configuration, fragmented text, and safe failure categories; no real API/calendar credentials are in fixtures. Independent review findings and fixes are recorded in [review notes](docs/REVIEW.md).
 
 See [product](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), [contracts](docs/CONTRACTS.md), [decisions](docs/DECISIONS.md), [backlog](docs/TASKS.md), and [acceptance examples](docs/TEST_CASES.md).

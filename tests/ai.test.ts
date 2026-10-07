@@ -79,6 +79,50 @@ describe('offline representative planning', () => {
 });
 
 describe('live provider boundary', () => {
+  it('uses low reasoning for Luna and accepts text split across output blocks', async () => {
+    const wire = JSON.stringify({ message: 'Move Portfolio', clarification: null, actions: [{ type: 'move_task', taskId: 'portfolio', plannedDate: '2026-10-09' }] });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output: [
+      { type: 'reasoning' }, { type: 'message', content: [{ type: 'output_text', text: wire.slice(0, 20) }, { type: 'output_text', text: wire.slice(20) }] },
+    ] })));
+    const reply = await createPlannerReply('Move Portfolio', context(), { apiKey: 'test-key', model: 'gpt-5.6-luna', fetch: fetchMock });
+    expect(reply.actions).toEqual([{ type: 'move_task', taskId: 'portfolio', plannedDate: '2026-10-09' }]);
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
+    expect(body.reasoning).toEqual({ effort: 'low' });
+    expect(body.max_output_tokens).toBe(8000);
+  });
+  it.each([[401, 'API key was rejected'], [403, 'cannot access'], [404, 'cannot access'], [429, 'credits and rate limits'], [400, 'request configuration'], [503, 'temporarily unavailable']] as const)('explains HTTP %i without exposing the error body', async (status, message) => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response('private response contents', { status }));
+    const reply = await createPlannerReply('DRI done', context(), { apiKey: 'test-key', model: 'gpt-5.6-luna', fetch: fetchMock });
+    expect(reply.message).toContain(message);
+    expect(reply.actions).toEqual([]);
+    expect(JSON.stringify(reply).includes('private response contents')).toBe(false);
+  });
+  it('distinguishes invalid proposals from connection failures without echoing unsafe content', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(fakeResponse({ message: 'private contents', actions: [{ type: 'complete_task', taskId: 'unknown' }] }));
+    const reply = await createPlannerReply('DRI done', context(), { apiKey: 'test-key', model: 'gpt-5.6-luna', fetch: fetchMock });
+    expect(reply.message).toContain('could not be safely validated');
+    expect(reply.actions).toEqual([]);
+    expect(JSON.stringify(reply).includes('private contents')).toBe(false);
+  });
+  it('distinguishes an output limit and unreadable response from network errors', async () => {
+    for (const [wire, expected] of [[JSON.stringify({ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } }), 'output limit'], ['not JSON', 'unreadable response'], [JSON.stringify({ status: 'completed', output: {} }), 'unreadable response']] as const) {
+      const reply = await createPlannerReply('DRI done', context(), { apiKey: 'test-key', model: 'gpt-5.6-luna', fetch: async () => new Response(wire) });
+      expect(reply.message).toContain(expected);
+      expect(reply.actions).toEqual([]);
+    }
+  });
+  it('reports timeouts separately and aborts response consumption', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock: typeof fetch = async (_input, init) => new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('private network detail')), { once: true }));
+      const pending = createPlannerReply('DRI done', context(), { apiKey: 'test-key', model: 'gpt-5.6-luna', fetch: fetchMock });
+      await vi.advanceTimersByTimeAsync(60000);
+      const reply = await pending;
+      expect(reply.message).toContain('timed out after 60 seconds');
+      expect(reply.actions).toEqual([]);
+      expect(reply.message.includes('private network detail')).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
   it('uses strict Responses schema, store:false, configurable model and validated proposals', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(fakeResponse({ message: 'Move Portfolio', clarification: null,
       actions: [{ type: 'move_task', taskId: 'portfolio', plannedDate: '2026-10-09' }] }));
@@ -86,6 +130,7 @@ describe('live provider boundary', () => {
     expect(reply.actions).toHaveLength(1);
     const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string);
     expect(body.model).toBe('configured-model'); expect(body.store).toBe(false);
+    expect(Object.hasOwn(body, 'reasoning')).toBe(false);
     expect(body.text.format).toMatchObject({ type: 'json_schema', name: 'planner_reply', strict: true });
     expect(body.input.includes('test-key')).toBe(false);
   });

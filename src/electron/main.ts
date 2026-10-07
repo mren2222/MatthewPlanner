@@ -11,6 +11,7 @@ import { localDate } from '../core/dates';
 import { createPlannerReply, reviewToday } from '../ai';
 import { redactText } from '../ai/context';
 import { CredentialVault, type PrivateSettings } from './credentials';
+import { AI_MODEL_PREFERENCE_VERSION, selectedAIModel } from './preferences';
 import { ICloudCalendarProvider, type CalendarProvider } from '../calendar';
 
 app.setName('Matthew Planner');
@@ -34,7 +35,7 @@ function serialize<T>(fn: () => Promise<T> | T): Promise<T> {
 function snapshot(): PlannerSnapshot {
   return { ...store.snapshotData(), settings: {
     aiConfigured: !!(config.openaiKey || process.env.OPENAI_API_KEY),
-    aiModel: config.aiModel || process.env.PLANNER_AI_MODEL || 'gpt-4o-mini',
+    aiModel: selectedAIModel(config, process.env.PLANNER_AI_MODEL),
     calendarConfigured: !!(config.appleAccount && config.applePassword),
     calendarId: config.calendarId, appleAccount: config.appleAccount,
     secureStorageAvailable: vault.available()
@@ -134,7 +135,7 @@ async function start(): Promise<void> {
   handle('reviewToday', () => { saveReply(reviewToday(context()), 'Review Today', store.snapshotData().revision); return snapshot(); });
   handle('saveSettings', (input: unknown) => {
     const settings: SettingsInput = z.object({ openaiKey: z.string().max(1000).optional(), aiModel: z.string().trim().min(1).max(100).optional(), appleAccount: z.string().trim().max(320).optional(), applePassword: z.string().max(1000).optional(), calendarId: z.string().max(2000).optional(), clearAI: z.boolean().optional(), clearCalendar: z.boolean().optional() }).strict().parse(input);
-    const next = { ...config };
+    const next = { ...config, aiModel: snapshot().settings.aiModel, aiModelPreferenceVersion: AI_MODEL_PREFERENCE_VERSION };
     if (settings.clearAI) delete next.openaiKey;
     if (settings.clearCalendar) { delete next.appleAccount; delete next.applePassword; delete next.calendarId; }
     for (const name of ['openaiKey', 'aiModel', 'appleAccount', 'applePassword', 'calendarId'] as const) if (settings[name]?.trim()) next[name] = settings[name]!.trim();

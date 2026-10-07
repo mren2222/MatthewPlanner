@@ -60,28 +60,54 @@ export class OpenAIPlannerProvider implements PlannerProvider {
   async reply(message: string, context: PlannerContext): Promise<PlannerReply> {
     if (!this.config.apiKey || !this.config.model) return { message: 'Set an OpenAI API key and model in Settings to enable the full AI planner.', actions: [] };
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+    const timeout = setTimeout(() => controller.abort(), 60000);
     try {
       const response = await (this.config.fetch ?? globalThis.fetch)('https://api.openai.com/v1/responses', {
         method: 'POST', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.config.apiKey}` },
         body: JSON.stringify({ model: this.config.model, store: false,
-          instructions, max_output_tokens: 6000,
+          instructions, max_output_tokens: 8000,
+          ...(this.config.model === 'gpt-5.6-luna' ? { reasoning: { effort: 'low' } } : {}),
           input: JSON.stringify({ context: buildPlannerContext(context, message), userMessage: redactText(message, 4000) }),
           text: { format: { type: 'json_schema', name: 'planner_reply', strict: true, schema: plannerReplySchema } },
         }),
       });
-      if (!response.ok) return { message: 'The AI service could not respond. Check the API key, model, and connection in Settings, then retry.', actions: [] };
-      const data = await response.json() as { status?: string; output?: { type?: string; content?: { type?: string; text?: string }[] }[] };
-      if (data.status !== 'completed') return { message: 'The AI response was incomplete. No changes were proposed; please retry.', actions: [] };
-      const content = data.output?.filter(item => item.type === 'message').flatMap(item => item.content ?? []) ?? [];
+      if (!response.ok) {
+        const message = response.status === 401 ? 'The OpenAI API key was rejected. Replace it in Settings, then retry.'
+          : response.status === 403 || response.status === 404 ? 'This API project cannot access the selected model. Check model access and the model name in Settings.'
+          : response.status === 429 ? 'OpenAI has limited this request. Check API credits and rate limits, then retry.'
+          : response.status === 400 ? 'OpenAI rejected the request configuration. Check the selected model, or update the application.'
+          : response.status >= 500 ? 'The OpenAI service is temporarily unavailable. Please retry shortly.'
+          : 'The AI service could not respond. Check your Settings and connection, then retry.';
+        return { message, actions: [] };
+      }
+      let data: { status?: string; incomplete_details?: { reason?: string }; output?: { type?: string; content?: { type?: string; text?: string }[] }[] };
+      try { data = await response.json() as typeof data; }
+      catch {
+        if (controller.signal.aborted) throw new Error('Aborted response');
+        return { message: 'The AI service returned an unreadable response. No changes were proposed; please retry.', actions: [] };
+      }
+      if (!data || typeof data !== 'object') return { message: 'The AI service returned an unreadable response. No changes were proposed; please retry.', actions: [] };
+      if (data.status !== 'completed') return { message: data.incomplete_details?.reason === 'max_output_tokens'
+        ? 'The AI response reached its output limit. Ask for fewer planning changes at a time; no changes were proposed.'
+        : 'The AI response was incomplete. No changes were proposed; please retry.', actions: [] };
+      if (!Array.isArray(data.output) || data.output.some(item => !item || typeof item !== 'object' || (item.content !== undefined && !Array.isArray(item.content)))) {
+        return { message: 'The AI service returned an unreadable response. No changes were proposed; please retry.', actions: [] };
+      }
+      const content = data.output.filter(item => item.type === 'message').flatMap(item => item.content ?? []).filter(item => item && typeof item === 'object');
       if (content.some(item => item.type === 'refusal')) return { message: 'The AI could not help with that request. Please rephrase it as a planning request.', actions: [] };
       const texts = content.filter(item => item.type === 'output_text');
-      if (texts.length !== 1 || typeof texts[0].text !== 'string') throw new Error('Invalid response');
-      return validatePlannerReply(removeNulls(JSON.parse(texts[0].text)), context);
+      if (!texts.length || texts.some(item => typeof item.text !== 'string')) return { message: 'The AI response contained no usable planning reply. No changes were proposed; please retry.', actions: [] };
+      let proposal: unknown;
+      try { proposal = removeNulls(JSON.parse(texts.map(item => item.text).join(''))); }
+      catch { return { message: 'The AI reply did not match the required planning format. No changes were proposed; please retry.', actions: [] }; }
+      try { return validatePlannerReply(proposal, context); }
+      catch { return { message: 'The AI proposal could not be safely validated. Specify the task, date and duration more clearly; no changes were proposed.', actions: [] }; }
     } catch {
       // Provider exceptions/body content can contain credentials. Never echo or log them.
-      return { message: 'The AI request failed or returned an invalid proposal. No changes were proposed; please retry.', actions: [] };
+      return { message: controller.signal.aborted
+        ? 'The AI request timed out after 60 seconds. No changes were proposed; please retry.'
+        : 'Could not connect to OpenAI. Check your internet connection and VPN or proxy, then retry. No changes were proposed.', actions: [] };
     } finally { clearTimeout(timeout); }
   }
 }

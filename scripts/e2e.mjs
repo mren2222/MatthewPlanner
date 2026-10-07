@@ -38,6 +38,8 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   assert.equal((await state(page)).settings.aiConfigured, false);
+  assert.equal((await state(page)).settings.aiModel, 'gpt-5.6-luna');
+  assert.equal(await page.getByTestId('chat-input').evaluate(input => Math.round(input.getBoundingClientRect().height)), 126);
   await createTask(page, 'Portfolio');
   await expect(page.getByTestId('daily-total')).toHaveText('1h');
   await page.getByRole('button', { name: 'Edit Portfolio', exact: true }).click();

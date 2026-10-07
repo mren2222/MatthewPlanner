@@ -3,6 +3,21 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CredentialVault } from '../src/electron/credentials';
+import { selectedAIModel } from '../src/electron/preferences';
+describe('AI model preferences', () => {
+  it('switches fresh and legacy default settings to Luna without changing credentials', () => {
+    expect(selectedAIModel({})).toBe('gpt-5.6-luna');
+    const settings = { aiModel: 'gpt-4o-mini', appleAccount: 'example-account', applePassword: 'test-only-placeholder' };
+    const before = { ...settings };
+    expect(selectedAIModel(settings)).toBe('gpt-5.6-luna');
+    expect(settings).toEqual(before);
+  });
+  it('preserves later explicit choices and custom environment defaults', () => {
+    expect(selectedAIModel({ aiModel: 'gpt-4o-mini', aiModelPreferenceVersion: 1 })).toBe('gpt-4o-mini');
+    expect(selectedAIModel({ aiModel: 'custom-model' })).toBe('custom-model');
+    expect(selectedAIModel({}, 'environment-model')).toBe('environment-model');
+  });
+});
 describe('CredentialVault', () => {
   it('persists ciphertext and decrypts only through the backend', () => {
     const dir = mkdtempSync(join(tmpdir(), 'planner-secret-'));
