@@ -1,5 +1,30 @@
 # Independent review
 
+## Lead integration review of 0.3.1
+
+Read-only live diagnostics reproduced the incomplete refresh. The REPORT
+included a successful collection-self response with getetag 200 and calendar-data
+404, followed by complete event resources. The reader incorrectly treated that
+collection metadata as a missing event. The fix skips only an exact selected
+collection URL without event data when the response is successful and parsed.
+Actual missing resources still require authenticated recovery and fail on 404;
+event data at the collection URL is rejected. Previous-cache preservation and
+explicit remote publishing remain unchanged.
+
+Four synthetic regressions cover mixed collection/event responses, empty
+collection metadata, invalid collection-attached event data and missing actual
+event resources. Typecheck and all 123 tests pass. A separate read-only live
+check with the corrected reader discovers the target calendar and parses its
+events successfully. Credentials remain in main-process memory/OS secure
+storage; diagnostic output contains structural metadata only and is ignored by
+Git. The diagnostic needed the app's original userData encryption context;
+a failure using a different profile was not mistaken for invalid credentials.
+
+Lint, production build and packaged desktop workflows pass. Installed 0.3.1
+through the real Explorer context and verified startup automatically imports the
+calendar's events. Before/after snapshots match every existing task, local fixed
+event, activity and day note. No remote calendar write operation was invoked.
+
 ## Bilingual README review
 
 Added README.en.md with the same product features, installation links, connected

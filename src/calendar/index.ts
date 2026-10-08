@@ -125,7 +125,7 @@ function objectFromResponse(response: DAVResponse, calendarId: string): { url: s
     throw new CalendarError('Calendar refresh is incomplete. Previous imported events were kept.');
   }
   const url = appleUrl(response.href, calendarId);
-  if (!url.href.startsWith(calendarId) || url.hash) throw new CalendarError('iCloud returned an event outside the selected calendar.');
+  if (!url.href.startsWith(calendarId) || url.href === calendarId || url.hash) throw new CalendarError('iCloud returned an invalid event resource for the selected calendar.');
   return { url: url.href, etag: etag ?? '', data };
 }
 
@@ -338,6 +338,12 @@ export class ICloudCalendarProvider implements CalendarProvider {
       const seen = new Set<string>();
       const objects: { url: string; etag: string; data: string }[] = [];
       for (const response of responses) {
+        // iCloud can include the selected collection itself in a depth-1
+        // REPORT. It has collection metadata, not VEVENT calendar-data; a
+        // calendar-data 404 on that exact collection is not a missing event.
+        if (response.ok && !response.parseError && !response.error && response.href
+          && !propText(response.props?.calendarData)
+          && appleUrl(response.href, calendarId).href === calendarId) continue;
         let object: { url: string; etag: string; data: string };
         try { object = objectFromResponse(response, calendarId); }
         catch (error) {

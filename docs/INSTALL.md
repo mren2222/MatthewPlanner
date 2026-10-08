@@ -1,6 +1,6 @@
 # Windows 安装与更新
 
-运行 `Matthew Planner Setup 0.3.0.exe`。安装程序为当前 Windows 用户安装软件，
+运行 `Matthew Planner Setup 0.3.1.exe`。安装程序为当前 Windows 用户安装软件，
 创建桌面和开始菜单中的 **Matthew Planner** 快捷方式，无需管理员权限。
 
 首次切换到安装版之前，请保存 Notes 并正常关闭旧便携版。以后从快捷方式打开，

@@ -21,6 +21,16 @@ The [tsdav maintainer README](https://github.com/natelindev/tsdav/blob/main/READ
 
 ## Snapshot and recurrence policy
 
+Version 0.3.1 fixes a verified iCloud REPORT compatibility issue: the server can
+return the selected calendar collection itself alongside event resources. That
+collection has metadata and a calendar-data 404 because it is not a VEVENT
+resource. Skip only a successful, parsed response for the exact selected
+collection URL with no event data; all real event resources still require
+complete data or successful GET recovery. Failed/invalid responses still abort
+the refresh and retain previous imports. A read-only live check against the
+user's mainland-China account successfully discovered “事情” and read its events
+after this fix; no PUT or DELETE was performed.
+
 `listEvents(calendarId)` returns one atomic snapshot of the selected account calendar's VEVENT objects. The REPORT has no date filter, filename filter, or incremental sync token. Ordinary non-recurring events are returned regardless of date, so a caller may remove stale imported objects only after the entire operation succeeds. An empty valid calendar returns an empty snapshot. Missing REPORT calendar-data is recovered through authenticated GET of the same validated event URL. Read-only imports can omit ETags and ignore failures of unrelated optional properties; guarded writes still require ETags. Unrecoverable object data, failed required properties, invalid times, duplicate resources or parse failures reject the complete refresh. The caller must keep the previous snapshot after any rejection.
 
 Recurring events are expanded locally with ical.js. RRULE, RDATE, EXDATE and explicit RECURRENCE-ID overrides use the library's recurrence machinery. The snapshot includes recurring instances overlapping the period from 7 elapsed days before refresh through 90 elapsed days after refresh. Instances outside this horizon intentionally disappear from a later imported snapshot. Occurrence identifiers use the resource URL plus a recurrence anchor fragment; moved exceptions retain the same identity. Cancelled events and cancelled exceptions do not appear. Explicit exceptions moved into the horizon from anchors outside it are included. Imported recurring events are read-only in the planner; edit the series in Calendar and refresh.

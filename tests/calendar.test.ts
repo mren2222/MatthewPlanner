@@ -30,6 +30,28 @@ function mockedProvider(report?: () => Response) {
 }
 
 describe('fixed-event calendar boundary', () => {
+  it('ignores collection metadata alongside real REPORT event resources', async () => {
+    const collection = `<d:response><d:href>${new URL(calendarId).pathname}</d:href><d:propstat><d:prop><d:getetag>"collection"</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat><d:propstat><d:prop><c:calendar-data/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>`;
+    const { provider, transport } = mockedProvider(() => multi(collection + xml(new URL(objectUrl).pathname, `<d:getetag>"1"</d:getetag><c:calendar-data><![CDATA[${simple}]]></c:calendar-data>`)));
+    const events = await provider.listEvents(calendarId);
+    expect(events).toHaveLength(1);
+    expect(events[0].externalId).toBe(objectUrl);
+    expect(transport.mock.calls.some(([url, init]) => String(url) === calendarId && init?.method === 'GET')).toBe(false);
+  });
+  it('accepts an empty calendar REPORT containing only collection metadata', async () => {
+    const { provider } = mockedProvider(() => multi(xml(new URL(calendarId).pathname, '<d:getetag>"collection"</d:getetag>')));
+    await expect(provider.listEvents(calendarId)).resolves.toEqual([]);
+  });
+  it('rejects event data incorrectly attached to the collection URL', async () => {
+    const { provider } = mockedProvider(() => multi(xml(new URL(calendarId).pathname, `<c:calendar-data><![CDATA[${simple}]]></c:calendar-data>`)));
+    await expect(provider.listEvents(calendarId)).rejects.toThrow('invalid event resource');
+  });
+  it('does not ignore an actual resource missing calendar-data', async () => {
+    const { provider, transport } = mockedProvider(() => multi(xml(new URL(objectUrl).pathname, '<d:getetag>"1"</d:getetag>')));
+    const original = transport.getMockImplementation()!;
+    transport.mockImplementation(async (input, init) => init?.method === 'GET' ? new Response(null, { status: 404 }) : original(input, init));
+    await expect(provider.listEvents(calendarId)).rejects.toThrow('HTTP 404');
+  });
   it('reads valid data despite unavailable optional properties and a missing ETag', async () => {
     const href = new URL(objectUrl).pathname;
     const { provider } = mockedProvider(() => multi(`<d:response><d:href>${href}</d:href><d:propstat><d:prop><c:calendar-data><![CDATA[${simple}]]></c:calendar-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat><d:propstat><d:prop><d:displayname/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>`));
