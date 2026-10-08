@@ -1,5 +1,7 @@
 # Matthew Planner
 
+中文 | [English](README.en.md)
+
 通过 **ChatGPT Work 对话输入计划**，在 Windows 桌面查看每日 Todo、固定安排和完成记录。
 
 你可以直接说：「明天上午 10 点有面试，今天准备项目介绍，预计 1 小时。」

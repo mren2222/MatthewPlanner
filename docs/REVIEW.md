@@ -1,5 +1,13 @@
 # Independent review
 
+## Bilingual README review
+
+Added README.en.md with the same product features, installation links, connected
+Work requirements and local-data boundaries as the Chinese README. The Chinese
+homepage content is retained, with only a reciprocal language link added. Checked
+all local Markdown links and verified the Chinese body against the previous
+commit. This documentation-only change does not alter the application or plans.
+
 ## Lead integration review of 0.3.0
 
 Post-release correction: the initial retention check observed the packaged
